@@ -34,7 +34,6 @@ zephyr_library_sources_ifndef(
 
 zephyr_library_sources(
   asic_state.c
-  arc_dma.c
   avs.c
   cat.c
   cm2dm_msg.c

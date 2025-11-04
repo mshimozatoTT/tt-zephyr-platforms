@@ -2,7 +2,7 @@
  * Copyright (c) 2024 Tenstorrent AI ULC
  * SPDX-License-Identifier: Apache-2.0
  */
-
+#include "arc_dma.h"
 #include "pcie.h"
 
 #include <stdbool.h>
@@ -10,6 +10,9 @@
 #include <stdlib.h>
 
 #include <zephyr/toolchain.h>
+
+/* Verify prototype of ArcDmaTransfer, because it's used by libpciesd.a. */
+__unused static bool (*verify_ArcDmaTransfer)(const void *, void *, uint32_t) = ArcDmaTransfer;
 
 /* The functions below are implemented in tt_blackhole_libpciesd.a */
 PCIeInitStatus SerdesInit(uint8_t pcie_inst, PCIeDeviceType device_type,
