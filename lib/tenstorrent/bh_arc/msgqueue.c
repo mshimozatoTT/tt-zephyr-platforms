@@ -371,7 +371,8 @@ static int register_interrupt_handlers(void)
 	return 0;
 }
 
-SYS_INIT_APP(register_interrupt_handlers);
+/* Initialize at PRE_KERNEL_2 level very early in boot */
+SYS_INIT(register_interrupt_handlers, PRE_KERNEL_2, 0);
 #endif
 
 #ifdef CONFIG_BOARD_TT_BLACKHOLE
