@@ -309,12 +309,26 @@
  */
 #define TAG_HOST_AICLK_LIMIT 70
 
+/** @brief Effective AICLK frequency in megahertz from the last completed busy window.
+ *
+ * Time-weighted average of AICLK sampled every 1ms between the most recent
+ * GO_BUSY and GO_LONG_IDLE messages. Cleared when a new GO_BUSY arrives.
+ */
+#define TAG_EFFECTIVE_BUSY_AICLK 71
+
+/** @brief Duration in milliseconds of the last completed busy window.
+ *
+ * Number of 1ms DVFS ticks between the most recent GO_BUSY and GO_LONG_IDLE.
+ * Cleared when a new GO_BUSY arrives.
+ */
+#define TAG_BUSY_DURATION_MS 72
+
 /** @} */ /* end of telemetry_tag group */
 
 /* Not a real tag, signifies the last tag in the list.
  * MUST be incremented if new tags are defined.
  */
-#define TAG_COUNT 71
+#define TAG_COUNT 73
 
 /* Telemetry tags are at offset `tag` in the telemetry buffer */
 #define TELEM_OFFSET(tag) (tag)

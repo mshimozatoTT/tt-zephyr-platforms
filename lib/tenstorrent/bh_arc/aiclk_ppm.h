@@ -73,6 +73,9 @@ union aiclk_targ_freq_info {
 };
 
 void aiclk_update_busy(void);
+void AccumulateEffectiveAiclk(void);
+uint32_t GetEffectiveBusyAiclk(void);
+uint32_t GetLastBusyDurationMs(void);
 void SetAiclkArbMax(enum aiclk_arb_max arb_max, float freq);
 void SetAiclkArbMin(enum aiclk_arb_min arb_min, float freq);
 void EnableArbMax(enum aiclk_arb_max arb_max, bool enable);

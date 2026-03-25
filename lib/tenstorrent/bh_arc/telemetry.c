@@ -170,6 +170,8 @@ static struct telemetry_table telemetry_table = {
 		[63] = {TAG_ENABLED_MAX_ARB, TELEM_OFFSET(TAG_ENABLED_MAX_ARB)},
 		[64] = {TAG_AICLK_PPM_INFO, TELEM_OFFSET(TAG_AICLK_PPM_INFO)},
 		[65] = {TAG_HOST_AICLK_LIMIT, TELEM_OFFSET(TAG_HOST_AICLK_LIMIT)},
+		[66] = {TAG_EFFECTIVE_BUSY_AICLK, TELEM_OFFSET(TAG_EFFECTIVE_BUSY_AICLK)},
+		[67] = {TAG_BUSY_DURATION_MS, TELEM_OFFSET(TAG_BUSY_DURATION_MS)},
 	},
 };
 /* clang-format on */
@@ -410,6 +412,8 @@ static void update_telemetry(void)
 	telemetry[TAG_ENABLED_MIN_ARB] = get_enabled_arb_min_bitmask();
 	telemetry[TAG_ENABLED_MAX_ARB] = get_enabled_arb_max_bitmask();
 	telemetry[TAG_AICLK_PPM_INFO] = get_targ_aiclk_info().u32_all;
+	telemetry[TAG_EFFECTIVE_BUSY_AICLK] = GetEffectiveBusyAiclk();
+	telemetry[TAG_BUSY_DURATION_MS] = GetLastBusyDurationMs();
 
 	clock_control_get_rate(
 		pll_dev_1, (clock_control_subsys_t)CLOCK_CONTROL_TT_BH_CLOCK_AXICLK,

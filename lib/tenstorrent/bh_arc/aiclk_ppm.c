@@ -72,6 +72,12 @@ static const struct device *const fwtable_dev = DEVICE_DT_GET(DT_NODELABEL(fwtab
 
 static bool last_msg_busy;
 
+/* Effective AICLK tracking across GO_BUSY → GO_LONG_IDLE windows */
+static uint64_t busy_freq_accumulator;
+static uint32_t busy_tick_count;
+static uint32_t effective_busy_aiclk;
+static uint32_t last_busy_duration_ms;
+
 void SetAiclkArbMax(enum aiclk_arb_max arb_max, float freq)
 {
 	aiclk_ppm.arbiter_max[arb_max].value = CLAMP(freq, aiclk_ppm.fmin, aiclk_ppm.fmax);
@@ -292,6 +298,24 @@ void aiclk_update_busy(void)
 	}
 }
 
+void AccumulateEffectiveAiclk(void)
+{
+	if (last_msg_busy || bh_get_aiclk_busy()) {
+		busy_freq_accumulator += aiclk_ppm.curr_freq;
+		busy_tick_count++;
+	}
+}
+
+uint32_t GetEffectiveBusyAiclk(void)
+{
+	return effective_busy_aiclk;
+}
+
+uint32_t GetLastBusyDurationMs(void)
+{
+	return last_busy_duration_ms;
+}
+
 uint32_t get_aiclk_effective_arb_min(enum aiclk_arb_min *effective_min_arb)
 {
 	/* Calculate the highest enabled arbiter_min */
@@ -357,12 +381,35 @@ uint32_t get_enabled_arb_max_bitmask(void)
 /** @brief Handles the request to set AICLK busy or idle
  * @param[in] request The request, of type @ref aiclk_set_speed_rqst, with command code
  *	@ref TT_SMC_MSG_AICLK_GO_BUSY to go busy, or @ref TT_SMC_MSG_AICLK_GO_LONG_IDLE to go idle.
- * @param[out] response The response to the host
+ * @param[out] response The response to the host. On GO_LONG_IDLE, data[1] contains the
+ *	effective AICLK (MHz) and data[2] contains the busy window duration (ms).
  * @return 0 for success
  */
 static uint8_t aiclk_busy_handler(const union request *request, struct response *response)
 {
+	bool was_busy = last_msg_busy;
+
 	last_msg_busy = (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY);
+
+	if (was_busy && !last_msg_busy) {
+		/* GO_LONG_IDLE transition — finalize effective frequency */
+		if (busy_tick_count > 0) {
+			effective_busy_aiclk =
+				(uint32_t)(busy_freq_accumulator / busy_tick_count);
+			last_busy_duration_ms = busy_tick_count;
+		}
+		busy_freq_accumulator = 0;
+		busy_tick_count = 0;
+		response->data[1] = effective_busy_aiclk;
+		response->data[2] = last_busy_duration_ms;
+	} else if (last_msg_busy) {
+		/* GO_BUSY — clear previous result, start fresh window */
+		effective_busy_aiclk = 0;
+		last_busy_duration_ms = 0;
+		busy_freq_accumulator = 0;
+		busy_tick_count = 0;
+	}
+
 	aiclk_update_busy();
 	return 0;
 }

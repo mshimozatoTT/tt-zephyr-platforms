@@ -14,6 +14,7 @@ bool dvfs_enabled;
 
 void DVFSChange(void)
 {
+	AccumulateEffectiveAiclk();
 	CalculateThrottlers();
 	CalculateTargAiclk();
 
