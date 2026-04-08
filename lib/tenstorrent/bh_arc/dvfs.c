@@ -18,6 +18,7 @@ void DVFSChange(void)
 	CalculateTargAiclk();
 
 	uint32_t targ_freq = GetAiclkTarg();
+
 	uint32_t aiclk_voltage = VFCurve(targ_freq);
 
 	VoltageArbRequest(VoltageReqAiclk, aiclk_voltage);

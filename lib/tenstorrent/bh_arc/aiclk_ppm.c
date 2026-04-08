@@ -44,6 +44,9 @@ typedef enum {
 	CLOCK_MODE_PPM_UNFORCED = 3
 } ClockControlMode;
 
+uint16_t clock_pattern[85][772];
+uint16_t clock_sequence_counter = 0;
+
 typedef struct {
 	bool enabled;
 	float value;
@@ -65,6 +68,7 @@ typedef struct {
 	AiclkArb arbiter_max[aiclk_arb_max_count];
 	AiclkArb arbiter_min[aiclk_arb_min_count];
 } AiclkPPM;
+
 
 static AiclkPPM aiclk_ppm = {
 	.fmax = AICLK_FMAX_MAX,
@@ -402,6 +406,20 @@ uint32_t get_enabled_arb_max_bitmask(void)
 	return bitmask;
 }
 
+//implement the start_clock_counter handler here
+
+void start_counting(void)
+{
+// check for output of GetAiclkTarg. Set as current value. iThe logic should check the requested clock, populate it in the first row only if it does not exist. 
+ // increase clock_sequence_counter. add the clock_sequence_counter to the column corresponding to the row only if the previous value != current target value
+}
+
+static uint8_t start_clock_counter(const union request *request, struct response *response)
+{
+	start_counting();
+	return 0;
+}
+
 /** @brief Handles the request to set AICLK busy or idle
  * @param[in] request The request, of type @ref aiclk_set_speed_rqst, with command code
  *	@ref TT_SMC_MSG_AICLK_GO_BUSY to go busy, or @ref TT_SMC_MSG_AICLK_GO_LONG_IDLE to go idle.
@@ -585,3 +603,5 @@ REGISTER_MESSAGE(TT_SMC_MSG_AISWEEP_START, SweepAiclkHandler);
 REGISTER_MESSAGE(TT_SMC_MSG_AISWEEP_STOP, SweepAiclkHandler);
 REGISTER_MESSAGE(TT_SMC_MSG_SET_ASIC_HOST_FMAX, set_arb_host_fmax_handler);
 REGISTER_MESSAGE(TT_SMC_MSG_CHARACTERISATION, characterisation_handler);
+REGISTER_MESSAGE(TT_SMC_MSG_START_CLOCK_COUNTER, start_clock_counter);
+REGISTER_MESSAGE(TT_SMC_MSG_STOP_CLOCK_COUNTER, stop_clock_counter);
