@@ -95,8 +95,12 @@ enum tt_smc_msg {
 	TT_SMC_MSG_COUNTER = 0x35,
 
 	/** @brief @ref throttler_pd_param_rqst "Throttler PD parameter get/set request" */
-	TT_SMC_MSG_THROTTLER_PD_PARAM = 0x36,
+	TT_SMC_MSG_THROTTLER_PD_PARAM = 0x38,
 
+	/** @brief @ref clock_counter_rqst "Start Clock Counter request" */
+	TT_SMC_MSG_START_CLOCK_COUNTER = 0x36,
+	/** @brief @ref clock_counter_rqst "Stop Clock Counter request" */
+	TT_SMC_MSG_STOP_CLOCK_COUNTER = 0x37,
 	/** @brief @ref force_vdd_rqst "Force VDD voltage request" */
 	TT_SMC_MSG_FORCE_VDD = 0x39,
 

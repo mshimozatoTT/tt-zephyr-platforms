@@ -44,8 +44,10 @@ typedef enum {
 	CLOCK_MODE_PPM_UNFORCED = 3
 } ClockControlMode;
 
-uint16_t clock_pattern[85][772];
+uint16_t clock_pattern[772][85];
 uint16_t clock_sequence_counter = 0;
+static bool enable_counter = false;
+static uint32_t prev_targ_freq = 0;  /* Track previous clock value to detect changes */
 
 typedef struct {
 	bool enabled;
@@ -408,15 +410,60 @@ uint32_t get_enabled_arb_max_bitmask(void)
 
 //implement the start_clock_counter handler here
 
-void start_counting(void)
+void clock_counter(void)
 {
-// check for output of GetAiclkTarg. Set as current value. iThe logic should check the requested clock, populate it in the first row only if it does not exist. 
- // increase clock_sequence_counter. add the clock_sequence_counter to the column corresponding to the row only if the previous value != current target value
+	if (!enable_counter) {
+		return;
+	}
+
+	uint32_t curr_targ_freq = GetAiclkTarg();
+
+	/* Only record on clock change */
+	if (curr_targ_freq == prev_targ_freq) {
+		return;
+	}
+
+	prev_targ_freq = curr_targ_freq;
+
+	/* Find the column index (0-84) for this frequency */
+	int freq_col = -1;
+	for (int col = 0; col < 85; col++) {
+		if (clock_pattern[0][col] == curr_targ_freq) {
+			freq_col = col;
+			break;
+		}
+		if (clock_pattern[0][col] == 0) {  /* Empty column, store frequency here */
+			clock_pattern[0][col] = curr_targ_freq;
+			freq_col = col;
+			break;
+		}
+	}
+
+	if (freq_col == -1) {
+		/* No space left for new frequency */
+		return;
+	}
+
+	/* Record sequence at this frequency in the next available row */
+	if (clock_sequence_counter < 772) {
+		clock_pattern[clock_sequence_counter][freq_col] = curr_targ_freq;
+	}
+
+	/* Increment sequence counter, reset at 65535 */
+	clock_sequence_counter++;
+	if (clock_sequence_counter > UINT16_MAX) {
+		clock_sequence_counter = 0;
+	}
 }
 
-static uint8_t start_clock_counter(const union request *request, struct response *response)
+static uint8_t clock_counter_handler(const union request *request, struct response *response)
 {
-	start_counting();
+	if (request->command_code == TT_SMC_MSG_START_CLOCK_COUNTER) {
+		enable_counter = true;
+		prev_targ_freq = GetAiclkTarg();  /* Initialize with current frequency */
+	} else if (request->command_code == TT_SMC_MSG_STOP_CLOCK_COUNTER) {
+		enable_counter = false;
+	}
 	return 0;
 }
 
@@ -603,5 +650,5 @@ REGISTER_MESSAGE(TT_SMC_MSG_AISWEEP_START, SweepAiclkHandler);
 REGISTER_MESSAGE(TT_SMC_MSG_AISWEEP_STOP, SweepAiclkHandler);
 REGISTER_MESSAGE(TT_SMC_MSG_SET_ASIC_HOST_FMAX, set_arb_host_fmax_handler);
 REGISTER_MESSAGE(TT_SMC_MSG_CHARACTERISATION, characterisation_handler);
-REGISTER_MESSAGE(TT_SMC_MSG_START_CLOCK_COUNTER, start_clock_counter);
-REGISTER_MESSAGE(TT_SMC_MSG_STOP_CLOCK_COUNTER, stop_clock_counter);
+REGISTER_MESSAGE(TT_SMC_MSG_START_CLOCK_COUNTER, clock_counter_handler);
+REGISTER_MESSAGE(TT_SMC_MSG_STOP_CLOCK_COUNTER, clock_counter_handler);

@@ -28,6 +28,7 @@ void DVFSChange(void)
 	DecreaseAiclk();
 	VoltageChange();
 	IncreaseAiclk();
+	clock_counter();
 }
 
 static void dvfs_work_handler(struct k_work *work)
