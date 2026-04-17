@@ -105,7 +105,7 @@ config TT_BH_ARC_POWER_CAPTURE_BYTES
 
 config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
 	bool "Clock pattern ring buffer (keep newest samples when full)"
-	default n
+	default y
 	help
 	  When the data row range is full, wrap to row 1 and overwrite. Sequence numbers still
 	  increase monotonically (until uint16 wrap), so host tools sort by sample index for time
@@ -113,7 +113,7 @@ config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
 
 config TT_BH_ARC_CLOCK_SAMPLE_DIVISOR
 	int "Clock pattern: record one row every N DVFS ticks (1 ms each)"
-	default 50
+	default 1
 	range 1 1000
 	help
 	  1 = one row per millisecond. For example 13 gives ~10 s wall time in 771 rows
