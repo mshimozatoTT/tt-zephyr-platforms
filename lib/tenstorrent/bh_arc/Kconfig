@@ -85,6 +85,32 @@ config TT_BH_ARC_DMFW_PING_TIMEOUT
 	  Timeout for DMFW ping in milliseconds. If the DMFW does not respond within this time,
 	  the ping will be considered failed.
 
+config TT_BH_ARC_CLOCK_PATTERN_ROWS
+	int "Clock pattern buffer rows (row 0 = MHz header, rows 1..N-1 = samples)"
+	default 772
+	range 16 12000
+	help
+	  Each stored sample uses one row. At 1 ms sampling, 772 rows cover about 0.77 s of data
+	  before the buffer stops recording (legacy mode) or before the oldest row is overwritten
+	  (ring buffer mode). Increase rows (uses RAM) or use TT_BH_ARC_CLOCK_SAMPLE_DIVISOR to
+	  subsample in time.
+
+config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
+	bool "Clock pattern ring buffer (keep newest samples when full)"
+	default n
+	help
+	  When the data row range is full, wrap to row 1 and overwrite. Sequence numbers still
+	  increase monotonically (until uint16 wrap), so host tools sort by sample index for time
+	  order. When disabled, recording stops when full (legacy).
+
+config TT_BH_ARC_CLOCK_SAMPLE_DIVISOR
+	int "Clock pattern: record one row every N DVFS ticks (1 ms each)"
+	default 1
+	range 1 1000
+	help
+	  1 = one row per millisecond. For example 13 gives ~10 s wall time in 771 rows
+	  (771 * 13 ms). Sequence numbers in the grid count stored samples, not elapsed ms.
+
 module = BH_ARC
 module-str = bh_arc
 source "subsys/logging/Kconfig.template.log_config"

@@ -11,12 +11,14 @@
 #include "vf_curve.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include <tenstorrent/bh_power.h>
 #include <tenstorrent/smc_msg.h>
 #include <tenstorrent/msgqueue.h>
 #include <tenstorrent/sys_init_defines.h>
 #include <zephyr/init.h>
+#include <zephyr/kernel.h>
 #include <zephyr/drivers/misc/bh_fwtable.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/device.h>
@@ -44,10 +46,21 @@ typedef enum {
 	CLOCK_MODE_PPM_UNFORCED = 3
 } ClockControlMode;
 
-uint16_t clock_pattern[772][85];
+#define CLOCK_PATTERN_ROWS CONFIG_TT_BH_ARC_CLOCK_PATTERN_ROWS
+#define CLOCK_PATTERN_COLS 85
+/* Row 0: target AICLK (MHz) per column. Data rows: sample index in cell (not MHz). */
+uint16_t clock_pattern[CLOCK_PATTERN_ROWS][CLOCK_PATTERN_COLS];
 uint16_t clock_sequence_counter = 0;
 static bool enable_counter = false;
-static uint32_t prev_targ_freq = 0;  /* Track previous clock value to detect changes */
+/* Next data row (1 .. CLOCK_PATTERN_ROWS-1); row 0 is frequency header only. */
+static uint16_t clock_next_data_row = 1;
+static uint16_t clock_sample_phase;
+static bool clock_pattern_overflow_logged;
+/* k_uptime_get_32(): do not log samples until this time (START request data[1] = delay_ms). */
+static uint32_t clock_capture_not_before_ms;
+/* START data[2] bit0: defer rows until GO_BUSY (or already busy when START was issued). */
+static bool clock_gate_samples_on_go_busy;
+static bool clock_go_busy_seen_since_start;
 
 typedef struct {
 	bool enabled;
@@ -408,61 +421,108 @@ uint32_t get_enabled_arb_max_bitmask(void)
 	return bitmask;
 }
 
-//implement the start_clock_counter handler here
-
 void clock_counter(void)
 {
 	if (!enable_counter) {
 		return;
 	}
 
-	uint32_t curr_targ_freq = GetAiclkTarg();
-
-	/* Only record on clock change */
-	if (curr_targ_freq == prev_targ_freq) {
+	if (k_uptime_get_32() < clock_capture_not_before_ms) {
 		return;
 	}
 
-	prev_targ_freq = curr_targ_freq;
+	if (clock_gate_samples_on_go_busy && !clock_go_busy_seen_since_start) {
+		return;
+	}
 
-	/* Find the column index (0-84) for this frequency */
+	if (CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR > 1) {
+		clock_sample_phase++;
+		if (clock_sample_phase < CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR) {
+			return;
+		}
+		clock_sample_phase = 0;
+	}
+
+	if (IS_ENABLED(CONFIG_TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER)) {
+		if (clock_next_data_row >= CLOCK_PATTERN_ROWS) {
+			clock_next_data_row = 1;
+			if (!clock_pattern_overflow_logged) {
+				LOG_INF("clock_pattern ring: overwriting oldest rows (newest kept)");
+				clock_pattern_overflow_logged = true;
+			}
+		}
+	} else if (clock_next_data_row >= CLOCK_PATTERN_ROWS) {
+		if (!clock_pattern_overflow_logged) {
+			LOG_WRN("clock_pattern full (%u rows); stopping capture", CLOCK_PATTERN_ROWS);
+			clock_pattern_overflow_logged = true;
+		}
+		return;
+	}
+
+	uint32_t curr_targ_freq = GetAiclkTarg();
+
+	/* Find the column index for this frequency; row 0 stores MHz per column. */
 	int freq_col = -1;
-	for (int col = 0; col < 85; col++) {
+
+	for (int col = 0; col < CLOCK_PATTERN_COLS; col++) {
 		if (clock_pattern[0][col] == curr_targ_freq) {
 			freq_col = col;
 			break;
 		}
-		if (clock_pattern[0][col] == 0) {  /* Empty column, store frequency here */
-			clock_pattern[0][col] = curr_targ_freq;
+		if (clock_pattern[0][col] == 0) {
+			clock_pattern[0][col] = (uint16_t)curr_targ_freq;
 			freq_col = col;
 			break;
 		}
 	}
 
 	if (freq_col == -1) {
-		/* No space left for new frequency */
+		/* No column left for a new frequency value */
 		return;
 	}
 
-	/* Record sequence at this frequency in the next available row */
-	if (clock_sequence_counter < 772) {
-		clock_pattern[clock_sequence_counter][freq_col] = curr_targ_freq;
-	}
+	/* One non-zero cell per row; clear before write so ring overwrites do not leave stale MHz
+	 * columns from an earlier lap.
+	 */
+	memset(&clock_pattern[clock_next_data_row][0], 0,
+	       CLOCK_PATTERN_COLS * sizeof(clock_pattern[0][0]));
 
-	/* Increment sequence counter, reset at 65535 */
 	clock_sequence_counter++;
-	if (clock_sequence_counter > UINT16_MAX) {
-		clock_sequence_counter = 0;
-	}
+	clock_pattern[clock_next_data_row][freq_col] = clock_sequence_counter;
+	clock_next_data_row++;
 }
 
 static uint8_t clock_counter_handler(const union request *request, struct response *response)
 {
 	if (request->command_code == TT_SMC_MSG_START_CLOCK_COUNTER) {
+		memset(clock_pattern, 0, sizeof(clock_pattern));
+		clock_sequence_counter = 0;
+		clock_next_data_row = 1;
+		clock_sample_phase = 0;
+		clock_pattern_overflow_logged = false;
+		/* Second word: milliseconds to wait (wall) before first row; 0 = immediate. */
+		uint32_t delay_ms = request->data[1];
+
+		if (delay_ms > 300000U) {
+			delay_ms = 300000U;
+		}
+		clock_capture_not_before_ms = k_uptime_get_32() + delay_ms;
+		if (delay_ms > 0) {
+			LOG_INF("clock_pattern: delay %u ms before sampling", delay_ms);
+		}
+		clock_gate_samples_on_go_busy = (request->data[2] & 1U) != 0;
+		if (clock_gate_samples_on_go_busy) {
+			/* If already busy, allow logging; else wait for aiclk_busy_handler GO_BUSY. */
+			clock_go_busy_seen_since_start = last_msg_busy;
+			LOG_INF("clock_pattern: defer rows until GO_BUSY (or already busy)");
+		} else {
+			clock_go_busy_seen_since_start = true;
+		}
 		enable_counter = true;
-		prev_targ_freq = GetAiclkTarg();  /* Initialize with current frequency */
 	} else if (request->command_code == TT_SMC_MSG_STOP_CLOCK_COUNTER) {
 		enable_counter = false;
+		clock_gate_samples_on_go_busy = false;
+		clock_go_busy_seen_since_start = false;
 	}
 	return 0;
 }
@@ -476,6 +536,10 @@ static uint8_t clock_counter_handler(const union request *request, struct respon
 static uint8_t aiclk_busy_handler(const union request *request, struct response *response)
 {
 	last_msg_busy = (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY);
+	if (enable_counter && clock_gate_samples_on_go_busy &&
+	    request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY) {
+		clock_go_busy_seen_since_start = true;
+	}
 	aiclk_update_busy();
 	return 0;
 }
