@@ -85,6 +85,8 @@ float GetThrottlerArbMax(enum aiclk_arb_max arb_max);
 uint8_t ForceAiclk(uint32_t freq);
 void SetAiclkResetSafe(bool enable);
 uint32_t GetAiclkTarg(void);
+/** PLL / clock-control readback in MHz (may differ briefly from @ref GetAiclkTarg while ramping). */
+uint32_t GetAiclkAppliedMhz(void);
 uint32_t GetMaxAiclkForVoltage(uint32_t voltage);
 uint32_t GetAiclkFmin(void);
 uint32_t GetAiclkFmax(void);

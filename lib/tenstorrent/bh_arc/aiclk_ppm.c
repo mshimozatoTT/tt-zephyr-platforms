@@ -48,7 +48,7 @@ typedef enum {
 
 #define CLOCK_PATTERN_ROWS CONFIG_TT_BH_ARC_CLOCK_PATTERN_ROWS
 #define CLOCK_PATTERN_COLS 85
-/* Row 0: target AICLK (MHz) per column. Data rows: sample index in cell (not MHz). */
+/* Row 0: applied AICLK (MHz) per column (PLL readback). Data rows: sample index in cell. */
 uint16_t clock_pattern[CLOCK_PATTERN_ROWS][CLOCK_PATTERN_COLS];
 uint16_t clock_sequence_counter = 0;
 static bool enable_counter = false;
@@ -336,6 +336,23 @@ uint32_t GetAiclkTarg(void)
 	return aiclk_ppm.targ_freq;
 }
 
+uint32_t GetAiclkAppliedMhz(void)
+{
+	uint32_t rate = 0;
+
+	if (pll_dev_0 == NULL) {
+		return aiclk_ppm.curr_freq;
+	}
+	if (clock_control_get_rate(pll_dev_0, (clock_control_subsys_t)CLOCK_CONTROL_TT_BH_CLOCK_AICLK,
+				   &rate) != 0) {
+		return aiclk_ppm.curr_freq;
+	}
+	if (rate == 0U) {
+		return aiclk_ppm.curr_freq;
+	}
+	return rate;
+}
+
 uint32_t GetAiclkFmin(void)
 {
 	return aiclk_ppm.fmin;
@@ -459,18 +476,18 @@ void clock_counter(void)
 		return;
 	}
 
-	uint32_t curr_targ_freq = GetAiclkTarg();
+	const uint32_t applied_mhz = GetAiclkAppliedMhz();
 
-	/* Find the column index for this frequency; row 0 stores MHz per column. */
+	/* Find the column index for this frequency; row 0 stores applied MHz per column. */
 	int freq_col = -1;
 
 	for (int col = 0; col < CLOCK_PATTERN_COLS; col++) {
-		if (clock_pattern[0][col] == curr_targ_freq) {
+		if (clock_pattern[0][col] == applied_mhz) {
 			freq_col = col;
 			break;
 		}
 		if (clock_pattern[0][col] == 0) {
-			clock_pattern[0][col] = (uint16_t)curr_targ_freq;
+			clock_pattern[0][col] = (uint16_t)applied_mhz;
 			freq_col = col;
 			break;
 		}
