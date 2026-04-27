@@ -839,10 +839,13 @@ struct characterisation_clock_counter_start_submsg {
 	uint32_t delay_ms;
 	/** @brief Bit 0: defer rows until @ref TT_SMC_MSG_AICLK_GO_BUSY */
 	uint32_t start_samples_on_go_busy;
+<<<<<<< HEAD
 	/** @brief Auto-stop capture after this many ms from the active window (0 = until STOP).
 	 *  With GO_BUSY gating, measured from first GO_BUSY after START (when seq resets).
 	 *  Without GO_BUSY, measured from @c delay_ms expiry. Capped in firmware. */
 	uint32_t capture_duration_ms;
+=======
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
 };
 
 /** @brief Union of all possible characterization submessage payloads */
@@ -853,7 +856,11 @@ union characterisation_submsg_data {
 	struct characterisation_clock_counter_start_submsg clock_counter_start;
 	/* add to this union to define more sub-message payloads */
 	/** @brief Generic fallback for raw access */
+<<<<<<< HEAD
 	uint8_t raw_data[12];
+=======
+	uint8_t raw_data[8];
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
 };
 
 /** @brief Generic characterization message for internal SMC use
@@ -863,6 +870,7 @@ union characterisation_submsg_data {
  *          Messages of this type are processed by @ref characterisation_handler.
  *          Submessages @ref TT_SUB_MSG_START_CLOCK_COUNTER and @ref TT_SUB_MSG_STOP_CLOCK_COUNTER
  *          control the AICLK clock-pattern sampler (see @ref characterisation_clock_counter_start_submsg).
+<<<<<<< HEAD
  *          @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO returns layout for host CSM reads (no ELF).
  *          Submessages @ref TT_SUB_MSG_START_POWER_COUNTER, @ref TT_SUB_MSG_STOP_POWER_COUNTER, and
  *          @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO control the board input power-pattern sampler
@@ -883,6 +891,8 @@ union characterisation_submsg_data {
  *          (@c CAPTURE_POWER_BYTES / 2), @c data[3] = 2 (uint16 centiwatts), @c data[4] = @c CONFIG_TT_BH_ARC_POWER_SAMPLE_DIVISOR,
  *          @c data[5] = layout magic @c 0x01727770, @c data[6] = @c power_pattern_next,
  *          @c data[7] = ring wrapped.
+=======
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
  */
 struct characterisation_msg_rqst {
 	/** @brief The command code corresponding to @ref TT_SMC_MSG_CHARACTERISATION */

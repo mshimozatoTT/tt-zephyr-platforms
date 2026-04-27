@@ -552,6 +552,7 @@ void clock_counter(void)
 static uint8_t handle_char_clock_counter_start(
 	const struct characterisation_clock_counter_start_submsg *params)
 {
+<<<<<<< HEAD
 	memset(clock_pattern_data(), 0, CAPTURE_CLOCK_BYTES);
 	clock_sequence_counter = 0U;
 	clock_pattern_next_data_row = 0U;
@@ -562,6 +563,13 @@ static uint8_t handle_char_clock_counter_start(
 	clock_pattern_last_logged_applied_mhz = 0;
 	clock_applied_mhz_tick_sum = 0U;
 	clock_applied_mhz_tick_count = 0U;
+=======
+	memset(clock_pattern, 0, sizeof(clock_pattern));
+	clock_sequence_counter = 0;
+	clock_next_data_row = 1;
+	clock_sample_phase = 0;
+	clock_pattern_overflow_logged = false;
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
 	uint32_t delay_ms = params->delay_ms;
 
 	if (delay_ms > 300000U) {
@@ -572,6 +580,7 @@ static uint8_t handle_char_clock_counter_start(
 		LOG_INF("clock_pattern: delay %u ms before sampling", delay_ms);
 	}
 	start_aiclk_samples_on_go_busy = (params->start_samples_on_go_busy & 1U) != 0;
+<<<<<<< HEAD
 	clock_seq_reset_on_go_busy = start_aiclk_samples_on_go_busy;
 	clock_capture_duration_ms = params->capture_duration_ms;
 	clock_capture_deadline_ms = 0U;
@@ -594,6 +603,11 @@ static uint8_t handle_char_clock_counter_start(
 					clock_capture_not_before_ms + clock_capture_duration_ms;
 			}
 		}
+=======
+	if (start_aiclk_samples_on_go_busy) {
+		/* If already busy, allow logging; else wait for aiclk_busy_handler GO_BUSY. */
+		clock_go_busy_seen_since_start = last_msg_busy;
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
 		LOG_INF("clock_pattern: defer rows until GO_BUSY (or already busy)");
 	} else {
 		clock_go_busy_seen_since_start = true;
@@ -607,6 +621,7 @@ static uint8_t handle_char_clock_counter_stop(void)
 	enable_counter = false;
 	start_aiclk_samples_on_go_busy = false;
 	clock_go_busy_seen_since_start = false;
+<<<<<<< HEAD
 	clock_seq_reset_on_go_busy = false;
 	clock_capture_duration_ms = 0U;
 	clock_capture_deadline_ms = 0U;
@@ -638,6 +653,8 @@ static uint8_t handle_char_clock_pattern_get_info(struct response *response)
 	response->data[5] = CLOCK_PATTERN_INFO_MAGIC;
 	response->data[6] = (avg_mhz << 16) | (clock_pattern_next_data_row & 0xFFFFU);
 	response->data[7] = clock_pattern_ring_wrapped;
+=======
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
 	return 0;
 }
 
@@ -651,8 +668,12 @@ static uint8_t aiclk_busy_handler(const union request *request, struct response 
 {
 	last_msg_busy = (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY);
 	if (enable_counter && start_aiclk_samples_on_go_busy &&
+<<<<<<< HEAD
 	    request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY &&
 	    !clock_go_busy_seen_since_start) {
+=======
+	    request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY) {
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
 		clock_go_busy_seen_since_start = true;
 		if (clock_seq_reset_on_go_busy) {
 			clock_sequence_counter = 0U;
@@ -804,6 +825,7 @@ static uint8_t characterisation_handler(const union request *request, struct res
 	case TT_SUB_MSG_STOP_CLOCK_COUNTER:
 		return handle_char_clock_counter_stop();
 
+<<<<<<< HEAD
 	case TT_SUB_MSG_GET_CLOCK_PATTERN_INFO:
 		return handle_char_clock_pattern_get_info(response);
 
@@ -817,6 +839,8 @@ static uint8_t characterisation_handler(const union request *request, struct res
 	case TT_SUB_MSG_GET_POWER_PATTERN_INFO:
 		return power_pattern_get_info(response);
 
+=======
+>>>>>>> b4fc4325 (feffective: ppa characterization message)
 	default:
 		LOG_WRN("Unknown characterization submessage ID: 0x%02x",
 			request->characterisation_msg.submsg_ID);
