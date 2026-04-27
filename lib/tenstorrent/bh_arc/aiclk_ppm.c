@@ -59,7 +59,7 @@ static bool clock_pattern_overflow_logged;
 /* k_uptime_get_32(): do not log samples until this time (START request data[1] = delay_ms). */
 static uint32_t clock_capture_not_before_ms;
 /* START data[2] bit0: defer rows until GO_BUSY (or already busy when START was issued). */
-static bool clock_gate_samples_on_go_busy;
+static bool start_aiclk_samples_on_go_busy;
 static bool clock_go_busy_seen_since_start;
 
 typedef struct {
@@ -448,7 +448,7 @@ void clock_counter(void)
 		return;
 	}
 
-	if (clock_gate_samples_on_go_busy && !clock_go_busy_seen_since_start) {
+	if (start_aiclk_samples_on_go_busy && !clock_go_busy_seen_since_start) {
 		return;
 	}
 
@@ -509,38 +509,40 @@ void clock_counter(void)
 	clock_next_data_row++;
 }
 
-static uint8_t clock_counter_handler(const union request *request, struct response *response)
+static uint8_t handle_char_clock_counter_start(
+	const struct characterisation_clock_counter_start_submsg *params)
 {
-	if (request->command_code == TT_SMC_MSG_START_CLOCK_COUNTER) {
-		memset(clock_pattern, 0, sizeof(clock_pattern));
-		clock_sequence_counter = 0;
-		clock_next_data_row = 1;
-		clock_sample_phase = 0;
-		clock_pattern_overflow_logged = false;
-		/* Second word: milliseconds to wait (wall) before first row; 0 = immediate. */
-		uint32_t delay_ms = request->data[1];
+	memset(clock_pattern, 0, sizeof(clock_pattern));
+	clock_sequence_counter = 0;
+	clock_next_data_row = 1;
+	clock_sample_phase = 0;
+	clock_pattern_overflow_logged = false;
+	uint32_t delay_ms = params->delay_ms;
 
-		if (delay_ms > 300000U) {
-			delay_ms = 300000U;
-		}
-		clock_capture_not_before_ms = k_uptime_get_32() + delay_ms;
-		if (delay_ms > 0) {
-			LOG_INF("clock_pattern: delay %u ms before sampling", delay_ms);
-		}
-		clock_gate_samples_on_go_busy = (request->data[2] & 1U) != 0;
-		if (clock_gate_samples_on_go_busy) {
-			/* If already busy, allow logging; else wait for aiclk_busy_handler GO_BUSY. */
-			clock_go_busy_seen_since_start = last_msg_busy;
-			LOG_INF("clock_pattern: defer rows until GO_BUSY (or already busy)");
-		} else {
-			clock_go_busy_seen_since_start = true;
-		}
-		enable_counter = true;
-	} else if (request->command_code == TT_SMC_MSG_STOP_CLOCK_COUNTER) {
-		enable_counter = false;
-		clock_gate_samples_on_go_busy = false;
-		clock_go_busy_seen_since_start = false;
+	if (delay_ms > 300000U) {
+		delay_ms = 300000U;
 	}
+	clock_capture_not_before_ms = k_uptime_get_32() + delay_ms;
+	if (delay_ms > 0) {
+		LOG_INF("clock_pattern: delay %u ms before sampling", delay_ms);
+	}
+	start_aiclk_samples_on_go_busy = (params->start_samples_on_go_busy & 1U) != 0;
+	if (start_aiclk_samples_on_go_busy) {
+		/* If already busy, allow logging; else wait for aiclk_busy_handler GO_BUSY. */
+		clock_go_busy_seen_since_start = last_msg_busy;
+		LOG_INF("clock_pattern: defer rows until GO_BUSY (or already busy)");
+	} else {
+		clock_go_busy_seen_since_start = true;
+	}
+	enable_counter = true;
+	return 0;
+}
+
+static uint8_t handle_char_clock_counter_stop(void)
+{
+	enable_counter = false;
+	start_aiclk_samples_on_go_busy = false;
+	clock_go_busy_seen_since_start = false;
 	return 0;
 }
 
@@ -553,7 +555,7 @@ static uint8_t clock_counter_handler(const union request *request, struct respon
 static uint8_t aiclk_busy_handler(const union request *request, struct response *response)
 {
 	last_msg_busy = (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY);
-	if (enable_counter && clock_gate_samples_on_go_busy &&
+	if (enable_counter && start_aiclk_samples_on_go_busy &&
 	    request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY) {
 		clock_go_busy_seen_since_start = true;
 	}
@@ -681,6 +683,13 @@ static uint8_t characterisation_handler(const union request *request, struct res
 		return handle_char_set_host_fmin(
 			request->characterisation_msg.submsg_data.fmin_value, response);
 
+	case TT_SUB_MSG_START_CLOCK_COUNTER:
+		return handle_char_clock_counter_start(
+			&request->characterisation_msg.submsg_data.clock_counter_start);
+
+	case TT_SUB_MSG_STOP_CLOCK_COUNTER:
+		return handle_char_clock_counter_stop();
+
 	default:
 		LOG_WRN("Unknown characterization submessage ID: 0x%02x",
 			request->characterisation_msg.submsg_ID);
@@ -731,5 +740,3 @@ REGISTER_MESSAGE(TT_SMC_MSG_AISWEEP_START, SweepAiclkHandler);
 REGISTER_MESSAGE(TT_SMC_MSG_AISWEEP_STOP, SweepAiclkHandler);
 REGISTER_MESSAGE(TT_SMC_MSG_SET_ASIC_HOST_FMAX, set_arb_host_fmax_handler);
 REGISTER_MESSAGE(TT_SMC_MSG_CHARACTERISATION, characterisation_handler);
-REGISTER_MESSAGE(TT_SMC_MSG_START_CLOCK_COUNTER, clock_counter_handler);
-REGISTER_MESSAGE(TT_SMC_MSG_STOP_CLOCK_COUNTER, clock_counter_handler);

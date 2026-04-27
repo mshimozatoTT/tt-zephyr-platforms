@@ -809,20 +809,34 @@ struct characterisation_set_fmin_submsg {
 	uint32_t value;
 };
 
+/** @brief Characterization submessage: start clock-pattern capture
+ * @details Lays out as @c request word[1] / word[2] after the characterization header word
+ */
+struct characterisation_clock_counter_start_submsg {
+	/** @brief Milliseconds to wait before first sample (capped in firmware) */
+	uint32_t delay_ms;
+	/** @brief Bit 0: defer rows until @ref TT_SMC_MSG_AICLK_GO_BUSY */
+	uint32_t start_samples_on_go_busy;
+};
+
 /** @brief Union of all possible characterization submessage payloads */
 union characterisation_submsg_data {
 	/** @brief Set host-requested minimum frequency floor */
 	struct characterisation_set_fmin_submsg fmin_value;
+	/** @brief Start clock-pattern counter */
+	struct characterisation_clock_counter_start_submsg clock_counter_start;
 	/* add to this union to define more sub-message payloads */
 	/** @brief Generic fallback for raw access */
-	uint8_t raw_data[4];
+	uint8_t raw_data[8];
 };
 
 /** @brief Generic characterization message for internal SMC use
  * @warning This is an internal interface. Direct use is not recommended
  *          unless implementing new characterization features.
  * @details Uses submsg_ID to dispatch to specific operations.
- *          Messages of this type are processed by @ref characterisation_handler
+ *          Messages of this type are processed by @ref characterisation_handler.
+ *          Submessages @ref TT_SUB_MSG_START_CLOCK_COUNTER and @ref TT_SUB_MSG_STOP_CLOCK_COUNTER
+ *          control the AICLK clock-pattern sampler (see @ref characterisation_clock_counter_start_submsg).
  */
 struct characterisation_msg_rqst {
 	/** @brief The command code corresponding to @ref TT_SMC_MSG_CHARACTERISATION */

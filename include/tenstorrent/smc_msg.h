@@ -183,6 +183,10 @@ enum tt_smc_msg {
 enum char_submsg_ids {
 	/** @brief Set host-requested minimum frequency (AICLK) */
 	TT_SUB_MSG_SET_HOST_REQUESTED_FMIN = 0x1,
+	/** @brief Start AICLK clock-pattern counter (@ref characterisation_clock_counter_start_submsg) */
+	TT_SUB_MSG_START_CLOCK_COUNTER = 0x2,
+	/** @brief Stop AICLK clock-pattern counter (no payload) */
+	TT_SUB_MSG_STOP_CLOCK_COUNTER = 0x3,
 };
 
 /** @} */
