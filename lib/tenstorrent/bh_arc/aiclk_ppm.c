@@ -48,14 +48,19 @@ typedef enum {
 
 #define CLOCK_PATTERN_ROWS CONFIG_TT_BH_ARC_CLOCK_PATTERN_ROWS
 #define CLOCK_PATTERN_COLS 85
-/* Row 0: applied AICLK (MHz) per column (PLL readback). Data rows: sample index in cell. */
+/* Row 0: applied AICLK (MHz) per column (PLL readback). Data rows: sequence tick at change only. */
 uint16_t clock_pattern[CLOCK_PATTERN_ROWS][CLOCK_PATTERN_COLS];
 uint16_t clock_sequence_counter = 0;
+/* Next free data row (1 .. CLOCK_PATTERN_ROWS-1); row 0 is MHz header. Host may truncate reads. */
+uint16_t clock_pattern_next_data_row = 1;
+/* Set once if ring buffer has wrapped (then host should scan all data rows, not next_data_row). */
+uint8_t clock_pattern_ring_wrapped;
 static bool enable_counter = false;
-/* Next data row (1 .. CLOCK_PATTERN_ROWS-1); row 0 is frequency header only. */
-static uint16_t clock_next_data_row = 1;
 static uint16_t clock_sample_phase;
 static bool clock_pattern_overflow_logged;
+/* Last applied MHz written to a data row; suppress duplicate rows until applied changes. */
+static uint32_t clock_pattern_last_logged_applied_mhz;
+static bool clock_pattern_have_logged_reference;
 /* k_uptime_get_32(): do not log samples until this time (START request data[1] = delay_ms). */
 static uint32_t clock_capture_not_before_ms;
 /* START data[2] bit0: defer rows until GO_BUSY (or already busy when START was issued). */
@@ -460,15 +465,19 @@ void clock_counter(void)
 		clock_sample_phase = 0;
 	}
 
+	/* Monotonic tick every sample period (even when we do not append a row). */
+	clock_sequence_counter++;
+
 	if (IS_ENABLED(CONFIG_TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER)) {
-		if (clock_next_data_row >= CLOCK_PATTERN_ROWS) {
-			clock_next_data_row = 1;
+		if (clock_pattern_next_data_row >= CLOCK_PATTERN_ROWS) {
+			clock_pattern_next_data_row = 1;
+			clock_pattern_ring_wrapped = 1;
 			if (!clock_pattern_overflow_logged) {
 				LOG_INF("clock_pattern ring: overwriting oldest rows (newest kept)");
 				clock_pattern_overflow_logged = true;
 			}
 		}
-	} else if (clock_next_data_row >= CLOCK_PATTERN_ROWS) {
+	} else if (clock_pattern_next_data_row >= CLOCK_PATTERN_ROWS) {
 		if (!clock_pattern_overflow_logged) {
 			LOG_WRN("clock_pattern full (%u rows); stopping capture", CLOCK_PATTERN_ROWS);
 			clock_pattern_overflow_logged = true;
@@ -498,15 +507,21 @@ void clock_counter(void)
 		return;
 	}
 
+	if (clock_pattern_have_logged_reference &&
+	    applied_mhz == clock_pattern_last_logged_applied_mhz) {
+		return;
+	}
+
 	/* One non-zero cell per row; clear before write so ring overwrites do not leave stale MHz
 	 * columns from an earlier lap.
 	 */
-	memset(&clock_pattern[clock_next_data_row][0], 0,
+	memset(&clock_pattern[clock_pattern_next_data_row][0], 0,
 	       CLOCK_PATTERN_COLS * sizeof(clock_pattern[0][0]));
 
-	clock_sequence_counter++;
-	clock_pattern[clock_next_data_row][freq_col] = clock_sequence_counter;
-	clock_next_data_row++;
+	clock_pattern[clock_pattern_next_data_row][freq_col] = clock_sequence_counter;
+	clock_pattern_next_data_row++;
+	clock_pattern_have_logged_reference = true;
+	clock_pattern_last_logged_applied_mhz = applied_mhz;
 }
 
 static uint8_t handle_char_clock_counter_start(
@@ -514,9 +529,12 @@ static uint8_t handle_char_clock_counter_start(
 {
 	memset(clock_pattern, 0, sizeof(clock_pattern));
 	clock_sequence_counter = 0;
-	clock_next_data_row = 1;
+	clock_pattern_next_data_row = 1;
+	clock_pattern_ring_wrapped = 0;
 	clock_sample_phase = 0;
 	clock_pattern_overflow_logged = false;
+	clock_pattern_have_logged_reference = false;
+	clock_pattern_last_logged_applied_mhz = 0;
 	uint32_t delay_ms = params->delay_ms;
 
 	if (delay_ms > 300000U) {
