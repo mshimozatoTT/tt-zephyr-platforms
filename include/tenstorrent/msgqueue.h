@@ -837,6 +837,14 @@ union characterisation_submsg_data {
  *          Messages of this type are processed by @ref characterisation_handler.
  *          Submessages @ref TT_SUB_MSG_START_CLOCK_COUNTER and @ref TT_SUB_MSG_STOP_CLOCK_COUNTER
  *          control the AICLK clock-pattern sampler (see @ref characterisation_clock_counter_start_submsg).
+ *          @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO returns layout for host CSM reads (no ELF).
+ *
+ *          Response words for @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO (exit code still in @c data[0]
+ *          low bits): @c data[1] = VMA of @c clock_pattern, @c data[2] = event capacity (same as
+ *          @c CONFIG_TT_BH_ARC_CLOCK_PATTERN_ROWS), @c data[3] = bytes per record (6 = dense
+ *          @c seq+MHz events; 85 = legacy sparse grid column count if ever revived),
+ *          @c data[4] = @c CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR, @c data[5] = magic @c 0x01636c70,
+ *          @c data[6] = @c clock_pattern_next_data_row (next write index), @c data[7] = ring wrapped.
  */
 struct characterisation_msg_rqst {
 	/** @brief The command code corresponding to @ref TT_SMC_MSG_CHARACTERISATION */

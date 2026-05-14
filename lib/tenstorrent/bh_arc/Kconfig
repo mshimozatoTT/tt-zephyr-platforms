@@ -86,14 +86,14 @@ config TT_BH_ARC_DMFW_PING_TIMEOUT
 	  the ping will be considered failed.
 
 config TT_BH_ARC_CLOCK_PATTERN_ROWS
-	int "Clock pattern buffer rows (row 0 = MHz header, rows 1..N-1 = samples)"
-	default 772
-	range 16 12000
+	int "Clock pattern: max stored frequency-change events (dense ring)"
+	default 24000
+	range 16 120000
 	help
-	  Each stored sample uses one row. At 1 ms sampling, 772 rows cover about 0.77 s of data
-	  before the buffer stops recording (legacy mode) or before the oldest row is overwritten
-	  (ring buffer mode). Increase rows (uses RAM) or use TT_BH_ARC_CLOCK_SAMPLE_DIVISOR to
-	  subsample in time.
+	  Each event is one (sequence_tick, applied_MHz) pair (6 bytes). Only transitions are stored,
+	  so wall time is much longer than the old sparse grid for the same RAM. Example: 24000
+	  events at ~1 ms between ticks and modest throttling can cover tens of seconds of timeline
+	  in ring mode. Increase further (uses RAM) or use TT_BH_ARC_CLOCK_SAMPLE_DIVISOR to subsample.
 
 config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
 	bool "Clock pattern ring buffer (keep newest samples when full)"

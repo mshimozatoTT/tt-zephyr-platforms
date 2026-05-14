@@ -187,6 +187,13 @@ enum char_submsg_ids {
 	TT_SUB_MSG_START_CLOCK_COUNTER = 0x2,
 	/** @brief Stop AICLK clock-pattern counter (no payload) */
 	TT_SUB_MSG_STOP_CLOCK_COUNTER = 0x3,
+
+	/** @brief Query @c clock_pattern layout (no submsg payload).
+	 *
+	 * Response @c data[1].. (see firmware): VMA pointer, rows, cols, sample divisor, magic,
+	 * optional host hints. Lets the host read CSM without @c zephyr.elf.
+	 */
+	TT_SUB_MSG_GET_CLOCK_PATTERN_INFO = 0x4,
 };
 
 /** @} */

@@ -47,12 +47,20 @@ typedef enum {
 } ClockControlMode;
 
 #define CLOCK_PATTERN_ROWS CONFIG_TT_BH_ARC_CLOCK_PATTERN_ROWS
-#define CLOCK_PATTERN_COLS 85
-/* Row 0: applied AICLK (MHz) per column (PLL readback). Data rows: sequence tick at change only. */
-uint16_t clock_pattern[CLOCK_PATTERN_ROWS][CLOCK_PATTERN_COLS];
-uint16_t clock_sequence_counter = 0;
-/* Next free data row (1 .. CLOCK_PATTERN_ROWS-1); row 0 is MHz header. Host may truncate reads. */
-uint16_t clock_pattern_next_data_row = 1;
+
+/** One stored transition: firmware sequence tick + applied MHz (dense ring, 6 bytes each). */
+struct clock_pattern_event {
+	uint32_t seq;
+	uint16_t mhz;
+} __packed __aligned(2);
+
+BUILD_ASSERT(sizeof(struct clock_pattern_event) == 6);
+
+/* Ring of frequency-change events; host reads via ``clock_pattern`` VMA and GET_CLOCK_PATTERN_INFO. */
+struct clock_pattern_event clock_pattern[CLOCK_PATTERN_ROWS];
+uint32_t clock_sequence_counter;
+/* Next write index in @ref clock_pattern (0 .. CLOCK_PATTERN_ROWS-1); equals event count before wrap. */
+uint32_t clock_pattern_next_data_row;
 /* Set once if ring buffer has wrapped (then host should scan all data rows, not next_data_row). */
 uint8_t clock_pattern_ring_wrapped;
 static bool enable_counter = false;
@@ -465,61 +473,38 @@ void clock_counter(void)
 		clock_sample_phase = 0;
 	}
 
-	/* Monotonic tick every sample period (even when we do not append a row). */
+	/* Monotonic tick every sample period (even when we do not append an event). */
 	clock_sequence_counter++;
 
-	if (IS_ENABLED(CONFIG_TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER)) {
-		if (clock_pattern_next_data_row >= CLOCK_PATTERN_ROWS) {
-			clock_pattern_next_data_row = 1;
-			clock_pattern_ring_wrapped = 1;
-			if (!clock_pattern_overflow_logged) {
-				LOG_INF("clock_pattern ring: overwriting oldest rows (newest kept)");
-				clock_pattern_overflow_logged = true;
-			}
-		}
-	} else if (clock_pattern_next_data_row >= CLOCK_PATTERN_ROWS) {
-		if (!clock_pattern_overflow_logged) {
-			LOG_WRN("clock_pattern full (%u rows); stopping capture", CLOCK_PATTERN_ROWS);
-			clock_pattern_overflow_logged = true;
-		}
-		return;
-	}
-
 	const uint32_t applied_mhz = GetAiclkAppliedMhz();
-
-	/* Find the column index for this frequency; row 0 stores applied MHz per column. */
-	int freq_col = -1;
-
-	for (int col = 0; col < CLOCK_PATTERN_COLS; col++) {
-		if (clock_pattern[0][col] == applied_mhz) {
-			freq_col = col;
-			break;
-		}
-		if (clock_pattern[0][col] == 0) {
-			clock_pattern[0][col] = (uint16_t)applied_mhz;
-			freq_col = col;
-			break;
-		}
-	}
-
-	if (freq_col == -1) {
-		/* No column left for a new frequency value */
-		return;
-	}
 
 	if (clock_pattern_have_logged_reference &&
 	    applied_mhz == clock_pattern_last_logged_applied_mhz) {
 		return;
 	}
 
-	/* One non-zero cell per row; clear before write so ring overwrites do not leave stale MHz
-	 * columns from an earlier lap.
-	 */
-	memset(&clock_pattern[clock_pattern_next_data_row][0], 0,
-	       CLOCK_PATTERN_COLS * sizeof(clock_pattern[0][0]));
+	uint32_t wr = clock_pattern_next_data_row;
 
-	clock_pattern[clock_pattern_next_data_row][freq_col] = clock_sequence_counter;
-	clock_pattern_next_data_row++;
+	if (IS_ENABLED(CONFIG_TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER)) {
+		if (wr >= CLOCK_PATTERN_ROWS) {
+			clock_pattern_ring_wrapped = 1;
+			wr = 0;
+			if (!clock_pattern_overflow_logged) {
+				LOG_INF("clock_pattern ring: overwriting oldest events (newest kept)");
+				clock_pattern_overflow_logged = true;
+			}
+		}
+	} else if (wr >= CLOCK_PATTERN_ROWS) {
+		if (!clock_pattern_overflow_logged) {
+			LOG_WRN("clock_pattern full (%u events); stopping capture", CLOCK_PATTERN_ROWS);
+			clock_pattern_overflow_logged = true;
+		}
+		return;
+	}
+
+	clock_pattern[wr].seq = clock_sequence_counter;
+	clock_pattern[wr].mhz = (uint16_t)applied_mhz;
+	clock_pattern_next_data_row = wr + 1U;
 	clock_pattern_have_logged_reference = true;
 	clock_pattern_last_logged_applied_mhz = applied_mhz;
 }
@@ -528,8 +513,8 @@ static uint8_t handle_char_clock_counter_start(
 	const struct characterisation_clock_counter_start_submsg *params)
 {
 	memset(clock_pattern, 0, sizeof(clock_pattern));
-	clock_sequence_counter = 0;
-	clock_pattern_next_data_row = 1;
+	clock_sequence_counter = 0U;
+	clock_pattern_next_data_row = 0U;
 	clock_pattern_ring_wrapped = 0;
 	clock_sample_phase = 0;
 	clock_pattern_overflow_logged = false;
@@ -561,6 +546,21 @@ static uint8_t handle_char_clock_counter_stop(void)
 	enable_counter = false;
 	start_aiclk_samples_on_go_busy = false;
 	clock_go_busy_seen_since_start = false;
+	return 0;
+}
+
+/** Magic for @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO @c data[5] (bytes @c 70 6c 63 01 = @c plc + ver 1). */
+#define CLOCK_PATTERN_INFO_MAGIC 0x01636c70U
+
+static uint8_t handle_char_clock_pattern_get_info(struct response *response)
+{
+	response->data[1] = (uint32_t)(uintptr_t)clock_pattern;
+	response->data[2] = CLOCK_PATTERN_ROWS;
+	response->data[3] = (uint32_t)sizeof(struct clock_pattern_event);
+	response->data[4] = CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR;
+	response->data[5] = CLOCK_PATTERN_INFO_MAGIC;
+	response->data[6] = clock_pattern_next_data_row;
+	response->data[7] = clock_pattern_ring_wrapped;
 	return 0;
 }
 
@@ -707,6 +707,9 @@ static uint8_t characterisation_handler(const union request *request, struct res
 
 	case TT_SUB_MSG_STOP_CLOCK_COUNTER:
 		return handle_char_clock_counter_stop();
+
+	case TT_SUB_MSG_GET_CLOCK_PATTERN_INFO:
+		return handle_char_clock_pattern_get_info(response);
 
 	default:
 		LOG_WRN("Unknown characterization submessage ID: 0x%02x",
