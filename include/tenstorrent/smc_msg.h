@@ -190,8 +190,8 @@ enum char_submsg_ids {
 
 	/** @brief Query @c clock_pattern layout (no submsg payload).
 	 *
-	 * Response @c data[1].. (see firmware): VMA pointer, rows, cols, sample divisor, magic,
-	 * optional host hints. Lets the host read CSM without @c zephyr.elf.
+	 * Response @c data[1].. (see @ref characterisation_msg_rqst): VMA, capacity, sample divisor,
+	 * layout magic, fill index. Lets the host read CSM without @c zephyr.elf.
 	 */
 	TT_SUB_MSG_GET_CLOCK_PATTERN_INFO = 0x4,
 };
