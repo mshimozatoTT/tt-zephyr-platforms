@@ -74,6 +74,12 @@ static uint32_t clock_capture_not_before_ms;
 /* START data[2] bit0: defer rows until GO_BUSY (or already busy when START was issued). */
 static bool start_aiclk_samples_on_go_busy;
 static bool clock_go_busy_seen_since_start;
+/* When GO_BUSY gating is on, reset seq at first GO_BUSY so ticks measure compute time only. */
+static bool clock_seq_reset_on_go_busy;
+/* START data[3]: auto-stop after this many ms (0 = until STOP submsg). */
+static uint32_t clock_capture_duration_ms;
+/* k_uptime_get_32() when capture_duration_ms elapses (0 = not armed). */
+static uint32_t clock_capture_deadline_ms;
 
 typedef struct {
 	bool enabled;
@@ -476,6 +482,13 @@ void clock_counter(void)
 	/* Monotonic tick every sample period (even when we do not append an event). */
 	clock_sequence_counter++;
 
+	if (clock_capture_deadline_ms != 0U &&
+	    k_uptime_get_32() >= clock_capture_deadline_ms) {
+		enable_counter = false;
+		LOG_INF("clock_pattern: capture_duration_ms elapsed — capture stopped");
+		return;
+	}
+
 	const uint32_t applied_mhz = GetAiclkAppliedMhz();
 
 	if (clock_pattern_have_logged_reference &&
@@ -530,9 +543,28 @@ static uint8_t handle_char_clock_counter_start(
 		LOG_INF("clock_pattern: delay %u ms before sampling", delay_ms);
 	}
 	start_aiclk_samples_on_go_busy = (params->start_samples_on_go_busy & 1U) != 0;
+	clock_seq_reset_on_go_busy = start_aiclk_samples_on_go_busy;
+	clock_capture_duration_ms = params->capture_duration_ms;
+	clock_capture_deadline_ms = 0U;
+	if (clock_capture_duration_ms > 300000U) {
+		clock_capture_duration_ms = 300000U;
+	}
+	if (clock_capture_duration_ms > 0U && !start_aiclk_samples_on_go_busy) {
+		clock_capture_deadline_ms =
+			clock_capture_not_before_ms + clock_capture_duration_ms;
+		LOG_INF("clock_pattern: auto-stop after %u ms from delay expiry",
+			clock_capture_duration_ms);
+	}
 	if (start_aiclk_samples_on_go_busy) {
 		/* If already busy, allow logging; else wait for aiclk_busy_handler GO_BUSY. */
 		clock_go_busy_seen_since_start = last_msg_busy;
+		if (clock_go_busy_seen_since_start) {
+			clock_seq_reset_on_go_busy = false;
+			if (clock_capture_duration_ms > 0U) {
+				clock_capture_deadline_ms =
+					clock_capture_not_before_ms + clock_capture_duration_ms;
+			}
+		}
 		LOG_INF("clock_pattern: defer rows until GO_BUSY (or already busy)");
 	} else {
 		clock_go_busy_seen_since_start = true;
@@ -546,6 +578,9 @@ static uint8_t handle_char_clock_counter_stop(void)
 	enable_counter = false;
 	start_aiclk_samples_on_go_busy = false;
 	clock_go_busy_seen_since_start = false;
+	clock_seq_reset_on_go_busy = false;
+	clock_capture_duration_ms = 0U;
+	clock_capture_deadline_ms = 0U;
 	return 0;
 }
 
@@ -574,8 +609,22 @@ static uint8_t aiclk_busy_handler(const union request *request, struct response 
 {
 	last_msg_busy = (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY);
 	if (enable_counter && start_aiclk_samples_on_go_busy &&
-	    request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY) {
+	    request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY &&
+	    !clock_go_busy_seen_since_start) {
 		clock_go_busy_seen_since_start = true;
+		if (clock_seq_reset_on_go_busy) {
+			clock_sequence_counter = 0U;
+			clock_sample_phase = 0;
+			clock_seq_reset_on_go_busy = false;
+			if (clock_capture_duration_ms > 0U) {
+				clock_capture_deadline_ms =
+					k_uptime_get_32() + clock_capture_duration_ms;
+				LOG_INF("clock_pattern: GO_BUSY — seq reset; auto-stop in %u ms",
+					clock_capture_duration_ms);
+			} else {
+				LOG_INF("clock_pattern: GO_BUSY — seq reset for compute window");
+			}
+		}
 	}
 	aiclk_update_busy();
 	return 0;

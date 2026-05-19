@@ -817,6 +817,10 @@ struct characterisation_clock_counter_start_submsg {
 	uint32_t delay_ms;
 	/** @brief Bit 0: defer rows until @ref TT_SMC_MSG_AICLK_GO_BUSY */
 	uint32_t start_samples_on_go_busy;
+	/** @brief Auto-stop capture after this many ms from the active window (0 = until STOP).
+	 *  With GO_BUSY gating, measured from first GO_BUSY after START (when seq resets).
+	 *  Without GO_BUSY, measured from @c delay_ms expiry. Capped in firmware. */
+	uint32_t capture_duration_ms;
 };
 
 /** @brief Union of all possible characterization submessage payloads */
@@ -827,7 +831,7 @@ union characterisation_submsg_data {
 	struct characterisation_clock_counter_start_submsg clock_counter_start;
 	/* add to this union to define more sub-message payloads */
 	/** @brief Generic fallback for raw access */
-	uint8_t raw_data[8];
+	uint8_t raw_data[12];
 };
 
 /** @brief Generic characterization message for internal SMC use
