@@ -724,6 +724,39 @@ struct read_vm_rqst {
 	uint32_t sensor_id;
 };
 
+/** @brief Host request to get or set a throttler PD-loop parameter
+ * @details Messages of this type are processed by @c throttler_pd_param_handler
+ *
+ * The @c throttler_id field is a @ref ThrottlerId (e.g. kThrottlerTDP = 0).
+ * The @c param_id field selects which parameter to read or write
+ * (see @ref throttler_pd_param_id).
+ *
+ * For @ref THROTTLER_PD_PARAM_OP_GET, the request @c value is ignored and
+ * the response @c data[1] returns the parameter as a 32-bit float
+ * bit-pattern.
+ *
+ * For @ref THROTTLER_PD_PARAM_OP_SET, @c value carries the new parameter
+ * using the same interpretation. Validation is parameter-specific (e.g.
+ * @c alpha_filter must be in [0, 1], @c du_max_down must be <= 0).
+ * Returns non-zero on invalid arguments.
+ */
+struct throttler_pd_param_rqst {
+	/** @brief The command code corresponding to @ref TT_SMC_MSG_THROTTLER_PD_PARAM */
+	uint8_t command_code;
+
+	/** @brief Operation: 0 = GET, 1 = SET (see @ref throttler_pd_param_op) */
+	uint8_t op;
+
+	/** @brief Throttler identifier (see @ref ThrottlerId) */
+	uint8_t throttler_id;
+
+	/** @brief Parameter identifier (see @ref throttler_pd_param_id) */
+	uint8_t param_id;
+
+	/** @brief Parameter value as 32-bit pattern (float bits or uint32) */
+	uint32_t value;
+};
+
 /** @brief Host request to set the TDP limit
  * @details Messages of this type are processed by @ref set_tdp_limit_handler
  */
@@ -984,6 +1017,9 @@ union request {
 
 	/** @brief A set TDP limit request */
 	struct set_tdp_limit_rqst set_tdp_limit;
+
+	/** @brief A throttler PD-loop parameter get/set request */
+	struct throttler_pd_param_rqst throttler_pd_param;
 
 	/** @brief An EEPROM read or write request */
 	struct eeprom_rqst eeprom;

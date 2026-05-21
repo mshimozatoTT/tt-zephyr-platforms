@@ -110,11 +110,30 @@ TT_SMC_MSG_SET_TDP_LIMIT = 0x22
 TT_SMC_MSG_SET_ASIC_HOST_FMAX = 0x23
 TT_SMC_MSG_CHARACTERISATION = 0xC6
 TT_SMC_MSG_COUNTER = 0x35
+TT_SMC_MSG_THROTTLER_PD_PARAM = 0x36
 TT_SMC_MSG_TOGGLE_GDDR_RESET = 0xB6
 TT_SMC_MSG_TOGGLE_ETH_RESET = 0xB0
 
 # ETH toggle reset (eth_tile_reset_rqst) — response[1] uses eth_reset_err from ARC
 ETH_RESET_ERR_INVALID_MASK = 1
+
+# Throttler PD-param message ops, throttler ids, and param ids
+# (keep in sync with throttler.h)
+THROTTLER_PD_PARAM_OP_GET = 0
+THROTTLER_PD_PARAM_OP_SET = 1
+
+THROTTLER_ID_TDP = 0
+
+THROTTLER_PD_PARAM_ALPHA_FILTER = 0
+THROTTLER_PD_PARAM_P_GAIN = 1
+THROTTLER_PD_PARAM_D_GAIN = 2
+THROTTLER_PD_PARAM_P_GAIN_OVER = 3
+THROTTLER_PD_PARAM_D_GAIN_OVER = 4
+THROTTLER_PD_PARAM_DEADBAND_UNDER = 5
+THROTTLER_PD_PARAM_DEADBAND_OVER = 6
+THROTTLER_PD_PARAM_DU_MAX_UP = 7
+THROTTLER_PD_PARAM_DU_MAX_DOWN = 8
+THROTTLER_PD_PARAM_I_GAIN = 9
 
 # Characterization submessage IDs
 TT_SUB_MSG_SET_HOST_REQUESTED_FMIN = 0x1
@@ -1677,6 +1696,329 @@ def test_characterisation_host_fmin_out_of_range(arc_chip_dut, asic_id):
     )
     assert response[0] != 0, "Expected error for out-of-range fmin (too low)"
     logger.info("Correctly rejected fmin value 100 (too low)")
+
+
+def _throttler_pd_param_msg(arc_chip, op, throttler_id, param_id, value_u32=0):
+    """Build and send a TT_SMC_MSG_THROTTLER_PD_PARAM request.
+
+    The header byte layout is: [command_code, op, throttler_id, param_id]
+    packed into word 0, followed by the 32-bit value (either a float bit
+    pattern or a uint32 boolean depending on param_id) in word 1.
+    """
+    header = (
+        TT_SMC_MSG_THROTTLER_PD_PARAM
+        | (op & 0xFF) << 8
+        | (throttler_id & 0xFF) << 16
+        | (param_id & 0xFF) << 24
+    )
+    return arc_chip.as_bh().arc_msg_buf([header, value_u32 & 0xFFFFFFFF, 0, 0, 0, 0, 0, 0])
+
+
+def _float_to_u32(value: float) -> int:
+    import struct
+
+    return struct.unpack("<I", struct.pack("<f", value))[0]
+
+
+def _u32_to_float(bits: int) -> float:
+    import struct
+
+    return struct.unpack("<f", struct.pack("<I", bits & 0xFFFFFFFF))[0]
+
+
+def _pd_param_get(arc_chip, throttler_id, param_id):
+    """Return (status, value_u32) for a GET request."""
+    response = _throttler_pd_param_msg(
+        arc_chip, THROTTLER_PD_PARAM_OP_GET, throttler_id, param_id, 0
+    )
+    return response[0], response[1]
+
+
+def _pd_param_set(arc_chip, throttler_id, param_id, value_u32):
+    """Return status (0 on success) for a SET request."""
+    response = _throttler_pd_param_msg(
+        arc_chip, THROTTLER_PD_PARAM_OP_SET, throttler_id, param_id, value_u32
+    )
+    return response[0]
+
+
+def test_throttler_pd_param_get_all_defaults(arc_chip_dut, asic_id):
+    """
+    Smoke check that GET succeeds for every loop parameter on the TDP throttler.
+
+    This verifies the message plumbing (command id, struct packing, dispatch)
+    rather than asserting specific defaults.
+    """
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    PARAM_IDS = [
+        ("ALPHA_FILTER", THROTTLER_PD_PARAM_ALPHA_FILTER),
+        ("P_GAIN", THROTTLER_PD_PARAM_P_GAIN),
+        ("D_GAIN", THROTTLER_PD_PARAM_D_GAIN),
+        ("P_GAIN_OVER", THROTTLER_PD_PARAM_P_GAIN_OVER),
+        ("D_GAIN_OVER", THROTTLER_PD_PARAM_D_GAIN_OVER),
+        ("DEADBAND_UNDER", THROTTLER_PD_PARAM_DEADBAND_UNDER),
+        ("DEADBAND_OVER", THROTTLER_PD_PARAM_DEADBAND_OVER),
+        ("DU_MAX_UP", THROTTLER_PD_PARAM_DU_MAX_UP),
+        ("DU_MAX_DOWN", THROTTLER_PD_PARAM_DU_MAX_DOWN),
+        ("I_GAIN", THROTTLER_PD_PARAM_I_GAIN),
+    ]
+
+    for name, pid in PARAM_IDS:
+        status, bits = _pd_param_get(arc_chip, THROTTLER_ID_TDP, pid)
+        assert status == 0, f"GET {name} failed with rc={status}"
+        logger.info(f"TDP {name} = {_u32_to_float(bits)} (bits=0x{bits:08x})")
+
+
+def test_throttler_pd_param_set_get_roundtrip(arc_chip_dut, asic_id):
+    """
+    Validates that SET followed by GET returns the value we wrote for a
+    float parameter (P_GAIN) and the integral parameter (I_GAIN).
+
+    The original values are restored at the end so the throttler state is
+    unchanged for other tests.
+    """
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    # Snapshot originals so we can put the throttler back the way we found it.
+    orig_status, orig_pgain_bits = _pd_param_get(
+        arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN
+    )
+    assert orig_status == 0
+    orig_status, orig_igain_bits = _pd_param_get(
+        arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_I_GAIN
+    )
+    assert orig_status == 0
+
+    try:
+        new_pgain = 0.321
+        status = _pd_param_set(
+            arc_chip,
+            THROTTLER_ID_TDP,
+            THROTTLER_PD_PARAM_P_GAIN,
+            _float_to_u32(new_pgain),
+        )
+        assert status == 0, "SET P_GAIN failed"
+
+        status, bits = _pd_param_get(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN
+        )
+        assert status == 0
+        got = _u32_to_float(bits)
+        assert abs(got - new_pgain) < 1e-6, f"P_GAIN round-trip mismatch: {got}"
+        logger.info(f"P_GAIN round-trip OK ({got})")
+
+        new_igain = 0.0025
+        status = _pd_param_set(
+            arc_chip,
+            THROTTLER_ID_TDP,
+            THROTTLER_PD_PARAM_I_GAIN,
+            _float_to_u32(new_igain),
+        )
+        assert status == 0, "SET I_GAIN failed"
+
+        status, bits = _pd_param_get(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_I_GAIN
+        )
+        assert status == 0
+        got = _u32_to_float(bits)
+        assert abs(got - new_igain) < 1e-6, f"I_GAIN round-trip mismatch: {got}"
+        logger.info(f"I_GAIN round-trip OK ({got})")
+    finally:
+        _pd_param_set(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN, orig_pgain_bits
+        )
+        _pd_param_set(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_I_GAIN, orig_igain_bits
+        )
+
+
+def test_throttler_pd_param_validation(arc_chip_dut, asic_id):
+    """
+    Validates that out-of-range PD-parameter values are rejected by the
+    handler. Sanity-checks that the handler also rejects unknown throttler
+    ids, param ids, and ops, so a bad host script can't corrupt loop state.
+    """
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    # alpha_filter must be in [0, 1].
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_ALPHA_FILTER,
+        _float_to_u32(1.5),
+    )
+    assert status != 0, "alpha_filter > 1 should be rejected"
+
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_ALPHA_FILTER,
+        _float_to_u32(-0.1),
+    )
+    assert status != 0, "alpha_filter < 0 should be rejected"
+
+    # du_max_up must be >= 0, du_max_down must be <= 0.
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DU_MAX_UP,
+        _float_to_u32(-1.0),
+    )
+    assert status != 0, "du_max_up < 0 should be rejected"
+
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DU_MAX_DOWN,
+        _float_to_u32(1.0),
+    )
+    assert status != 0, "du_max_down > 0 should be rejected"
+
+    # Deadbands must be in [0, 1).
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DEADBAND_UNDER,
+        _float_to_u32(-0.01),
+    )
+    assert status != 0, "deadband_under < 0 should be rejected"
+
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DEADBAND_OVER,
+        _float_to_u32(1.0),
+    )
+    assert status != 0, "deadband_over >= 1 should be rejected"
+
+    # Unknown throttler id (just past the last enum value).
+    INVALID_THROTTLER_ID = 0x7F
+    status, _ = _pd_param_get(
+        arc_chip, INVALID_THROTTLER_ID, THROTTLER_PD_PARAM_P_GAIN
+    )
+    assert status != 0, "GET with invalid throttler id should be rejected"
+
+    # Unknown param id.
+    INVALID_PARAM_ID = 0x7F
+    status, _ = _pd_param_get(arc_chip, THROTTLER_ID_TDP, INVALID_PARAM_ID)
+    assert status != 0, "GET with invalid param id should be rejected"
+
+    # Unknown op.
+    response = _throttler_pd_param_msg(
+        arc_chip, 0x7F, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN, 0
+    )
+    assert response[0] != 0, "Unknown op should be rejected"
+
+
+def test_throttler_pd_param_asymmetric_loop_smoke(arc_chip_dut, asic_id, board_name):
+    """
+    End-to-end smoke check that re-tuning the TDP throttler's asymmetric
+    loop parameters at runtime (including a non-zero I_GAIN, exercising the
+    integrator path) does not destabilise the system: telemetry stays
+    alive, AICLK keeps moving, and the original throttler state is
+    restored.
+
+    This test does NOT assert any specific control-quality metric; that
+    requires a workload-level benchmark. It only guards against
+    catastrophic regressions (chip hang, telemetry stall, AICLK pinned to
+    fmin) from the loop reacting to a runtime re-tune.
+    """
+    if _skip_boards(board_name):
+        pytest.skip("Asymmetric loop smoke test not run on this board class")
+
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    # Snapshot the params we touch so we can restore them at the end.
+    snapshot = {}
+    for pid in (
+        THROTTLER_PD_PARAM_P_GAIN,
+        THROTTLER_PD_PARAM_I_GAIN,
+        THROTTLER_PD_PARAM_D_GAIN,
+        THROTTLER_PD_PARAM_P_GAIN_OVER,
+        THROTTLER_PD_PARAM_D_GAIN_OVER,
+        THROTTLER_PD_PARAM_DEADBAND_UNDER,
+        THROTTLER_PD_PARAM_DEADBAND_OVER,
+        THROTTLER_PD_PARAM_DU_MAX_UP,
+        THROTTLER_PD_PARAM_DU_MAX_DOWN,
+    ):
+        status, bits = _pd_param_get(arc_chip, THROTTLER_ID_TDP, pid)
+        assert status == 0, f"GET param {pid} failed: rc={status}"
+        snapshot[pid] = bits
+
+    # Drive the chip into a busy state so the throttler has something to do.
+    try:
+        arc_chip.set_power_state("high")
+    except Exception as e:
+        logger.info(f"No driver support for power state IOCTL: {e}")
+
+    time.sleep(0.5)
+
+    # Program an asymmetric PID configuration: under-limit gains larger,
+    # over-limit gains gentler, modest deadbands, asymmetric slew caps,
+    # plus a small I_GAIN so the integrator path is exercised.
+    program = [
+        (THROTTLER_PD_PARAM_P_GAIN, _float_to_u32(0.4)),
+        (THROTTLER_PD_PARAM_I_GAIN, _float_to_u32(0.001)),
+        (THROTTLER_PD_PARAM_D_GAIN, _float_to_u32(0.0)),
+        (THROTTLER_PD_PARAM_P_GAIN_OVER, _float_to_u32(0.1)),
+        (THROTTLER_PD_PARAM_D_GAIN_OVER, _float_to_u32(0.0)),
+        (THROTTLER_PD_PARAM_DEADBAND_UNDER, _float_to_u32(0.01)),
+        (THROTTLER_PD_PARAM_DEADBAND_OVER, _float_to_u32(0.03)),
+        (THROTTLER_PD_PARAM_DU_MAX_UP, _float_to_u32(50.0)),
+        (THROTTLER_PD_PARAM_DU_MAX_DOWN, _float_to_u32(-10.0)),
+    ]
+
+    try:
+        for pid, value in program:
+            status = _pd_param_set(arc_chip, THROTTLER_ID_TDP, pid, value)
+            assert status == 0, f"SET param {pid} failed: rc={status}"
+
+        # Run the loop for ~1 second with the new tuning. The DVFS work
+        # handler ticks every 1 ms, so this is ~1000 control-loop iterations.
+        SAMPLES = 10
+        SETTLE_S = 0.1
+        aiclks = []
+        powers = []
+        for _ in range(SAMPLES):
+            time.sleep(SETTLE_S)
+            aiclk = arc_chip.arc_msg(TT_SMC_MSG_GET_AICLK)[0]
+            input_power = read_telem(arc_chip, TAG_INPUT_POWER)
+            aiclks.append(aiclk)
+            powers.append(input_power)
+
+        logger.info(f"Asymmetric loop AICLK samples: {aiclks}")
+        logger.info(f"Asymmetric loop input power samples: {powers}")
+
+        # Telemetry must still be live (every read above already succeeded).
+        # AICLK must be inside the valid PPM range; pinned at fmin would
+        # indicate the loop is over-throttling, pinned at zero would mean
+        # PLL or telemetry are dead.
+        assert all(200 <= clk <= 1400 for clk in aiclks), (
+            f"AICLK escaped valid range under asymmetric loop: {aiclks}"
+        )
+        # AICLK should not be constant at fmin for the whole window; either
+        # the loop is releasing freq when not power-limited, or the chip is
+        # idle (which is also fine because we kept it in high power state).
+        assert max(aiclks) > 250, (
+            f"AICLK pinned at fmin during asymmetric loop tuning: {aiclks}"
+        )
+
+        # Chip must still answer pings after the re-tune.
+        time.sleep(0.1)
+        response = arc_chip.arc_msg(TT_SMC_MSG_TEST, True, False, 7, 0, 1000)
+        assert response[0] == 8, "SMC stopped responding after re-tune"
+    finally:
+        # Restore original params unconditionally so we don't poison the rest
+        # of the suite. I_GAIN goes last because the handler resets the
+        # integrator state on a new i_gain write, giving the loop a clean
+        # starting point with the restored gains.
+        ordered = sorted(
+            snapshot.items(),
+            key=lambda kv: 1 if kv[0] == THROTTLER_PD_PARAM_I_GAIN else 0,
+        )
+        for pid, bits in ordered:
+            _pd_param_set(arc_chip, THROTTLER_ID_TDP, pid, bits)
 
 
 def test_bindesc(arc_chip_dut, asic_id):
