@@ -34,9 +34,9 @@ typedef enum {
  * is added to the arbiter. The "asymmetry" is in three independent
  * dimensions:
  *
- *   1. Under- vs. over-limit gains. @c p_gain / @c d_gain apply when
- *      @c value is under the limit, @c p_gain_over / @c d_gain_over apply
- *      when @c value is over the limit.
+ *   1. Under- vs. over-limit gains. @c p_gain / @c i_gain / @c d_gain apply
+ *      when @c value is under the limit, @c p_gain_over / @c i_gain_over /
+ *      @c d_gain_over apply when @c value is over the limit.
  *   2. Under- vs. over-limit deadbands (@c deadband_under,
  *      @c deadband_over) so the loop is quiet near the limit and the two
  *      sides can have different sensitivities.
@@ -46,9 +46,11 @@ typedef enum {
  * Within that framework PD / PI / PID is selected purely by which gains
  * are non-zero:
  *
- *   - Asymmetric PD : @c i_gain == 0, @c d_gain != 0 (or @c d_gain_over).
- *   - Asymmetric PI : @c i_gain != 0, @c d_gain == 0 and @c d_gain_over == 0.
- *   - Asymmetric PID: @c i_gain != 0 and any non-zero @c d_gain*.
+ *   - Asymmetric PD : @c i_gain == 0 and @c i_gain_over == 0,
+ *                     @c d_gain != 0 (or @c d_gain_over).
+ *   - Asymmetric PI : @c i_gain != 0 (or @c i_gain_over), @c d_gain == 0
+ *                     and @c d_gain_over == 0.
+ *   - Asymmetric PID: any non-zero @c i_gain* and any non-zero @c d_gain*.
  */
 typedef struct {
 	float alpha_filter;     /**< IIR coefficient applied to the measurement. */
@@ -62,15 +64,16 @@ typedef struct {
 	float p_gain;
 
 	/**
-	 * Integral gain. The loop integrates the absolute error each tick,
-	 * but only when the error is outside the active deadband (so the
-	 * integrator does not wind up while the loop is intentionally idle).
-	 * The integrator state is clamped to a fraction of the current limit
-	 * and is further back-calculated whenever the per-tick @c du output
-	 * saturates against @c du_max_up or @c du_max_down.
+	 * Integral gain used when @c value is under the limit. The loop
+	 * integrates the absolute error each tick, but only when the error
+	 * is outside the active deadband (so the integrator does not wind
+	 * up while the loop is intentionally idle). The integrator state is
+	 * clamped to a fraction of the current limit and is further
+	 * back-calculated whenever the per-tick @c du output saturates
+	 * against @c du_max_up or @c du_max_down.
 	 *
 	 * Set to 0 (default) to disable the integral action and recover pure
-	 * asymmetric-PD behaviour.
+	 * asymmetric-PD behaviour on the under-limit side.
 	 *
 	 * Units: MHz / (source-unit * tick), e.g. MHz/(W*tick) for TDP.
 	 */
@@ -86,6 +89,16 @@ typedef struct {
 
 	/** Proportional gain used when @c value is over the limit. */
 	float p_gain_over;
+	/**
+	 * Integral gain used when @c value is over the limit. Same
+	 * integrator state as @c i_gain (a single integrator is shared
+	 * across the under- and over-limit branches); only the multiplier
+	 * applied to that state changes when the loop crosses the limit.
+	 * Set to 0 to disable integral action on the over-limit side.
+	 *
+	 * Units: MHz / (source-unit * tick).
+	 */
+	float i_gain_over;
 	/** Derivative gain used when @c value is over the limit. */
 	float d_gain_over;
 
@@ -133,7 +146,8 @@ enum throttler_pd_param_id {
 	THROTTLER_PD_PARAM_DEADBAND_OVER = 6,    /**< float, fraction of limit */
 	THROTTLER_PD_PARAM_DU_MAX_UP = 7,        /**< float, MHz per tick (>= 0) */
 	THROTTLER_PD_PARAM_DU_MAX_DOWN = 8,      /**< float, MHz per tick (<= 0) */
-	THROTTLER_PD_PARAM_I_GAIN = 9,           /**< float (integral gain) */
+	THROTTLER_PD_PARAM_I_GAIN = 9,           /**< float (under-limit integral gain) */
+	THROTTLER_PD_PARAM_I_GAIN_OVER = 10,     /**< float (over-limit integral gain) */
 	THROTTLER_PD_PARAM_COUNT,
 };
 

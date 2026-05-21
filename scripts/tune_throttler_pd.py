@@ -23,7 +23,8 @@ PARAM = {
     "deadband_over":  (6, "float"),
     "du_max_up":      (7, "float"),
     "du_max_down":    (8, "float"),
-    "i_gain":         (9, "float"),  # integral gain (0 -> PD, non-zero -> PI/PID)
+    "i_gain":         (9, "float"),   # under-limit integral gain (0 -> PD, non-zero -> PI/PID)
+    "i_gain_over":    (10, "float"),  # over-limit integral gain
 }
 
 

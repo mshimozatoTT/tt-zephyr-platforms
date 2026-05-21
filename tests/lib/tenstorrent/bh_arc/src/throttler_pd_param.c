@@ -89,6 +89,23 @@ ZTEST(throttler_pd, test_set_get_i_gain_roundtrip)
 		       (double)bits_to_float(out_bits));
 }
 
+ZTEST(throttler_pd, test_set_get_i_gain_over_roundtrip)
+{
+	uint8_t status;
+	uint32_t out_bits;
+
+	status = send_pd_param_msg(THROTTLER_PD_PARAM_OP_SET, kThrottlerTDP,
+				   THROTTLER_PD_PARAM_I_GAIN_OVER, float_to_bits(0.002f), NULL);
+	zassert_equal(status, 0, "SET I_GAIN_OVER should succeed");
+
+	status = send_pd_param_msg(THROTTLER_PD_PARAM_OP_GET, kThrottlerTDP,
+				   THROTTLER_PD_PARAM_I_GAIN_OVER, 0, &out_bits);
+	zassert_equal(status, 0, "GET I_GAIN_OVER should succeed");
+	zassert_within(bits_to_float(out_bits), 0.002f, 1e-6f,
+		       "I_GAIN_OVER round-trip should match (got %f)",
+		       (double)bits_to_float(out_bits));
+}
+
 ZTEST(throttler_pd, test_set_invalid_alpha_filter_rejected)
 {
 	uint8_t status;

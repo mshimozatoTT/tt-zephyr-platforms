@@ -134,6 +134,7 @@ THROTTLER_PD_PARAM_DEADBAND_OVER = 6
 THROTTLER_PD_PARAM_DU_MAX_UP = 7
 THROTTLER_PD_PARAM_DU_MAX_DOWN = 8
 THROTTLER_PD_PARAM_I_GAIN = 9
+THROTTLER_PD_PARAM_I_GAIN_OVER = 10
 
 # Characterization submessage IDs
 TT_SUB_MSG_SET_HOST_REQUESTED_FMIN = 0x1
@@ -1762,6 +1763,7 @@ def test_throttler_pd_param_get_all_defaults(arc_chip_dut, asic_id):
         ("DU_MAX_UP", THROTTLER_PD_PARAM_DU_MAX_UP),
         ("DU_MAX_DOWN", THROTTLER_PD_PARAM_DU_MAX_DOWN),
         ("I_GAIN", THROTTLER_PD_PARAM_I_GAIN),
+        ("I_GAIN_OVER", THROTTLER_PD_PARAM_I_GAIN_OVER),
     ]
 
     for name, pid in PARAM_IDS:
@@ -1936,6 +1938,7 @@ def test_throttler_pd_param_asymmetric_loop_smoke(arc_chip_dut, asic_id, board_n
         THROTTLER_PD_PARAM_I_GAIN,
         THROTTLER_PD_PARAM_D_GAIN,
         THROTTLER_PD_PARAM_P_GAIN_OVER,
+        THROTTLER_PD_PARAM_I_GAIN_OVER,
         THROTTLER_PD_PARAM_D_GAIN_OVER,
         THROTTLER_PD_PARAM_DEADBAND_UNDER,
         THROTTLER_PD_PARAM_DEADBAND_OVER,
@@ -1962,6 +1965,7 @@ def test_throttler_pd_param_asymmetric_loop_smoke(arc_chip_dut, asic_id, board_n
         (THROTTLER_PD_PARAM_I_GAIN, _float_to_u32(0.001)),
         (THROTTLER_PD_PARAM_D_GAIN, _float_to_u32(0.0)),
         (THROTTLER_PD_PARAM_P_GAIN_OVER, _float_to_u32(0.1)),
+        (THROTTLER_PD_PARAM_I_GAIN_OVER, _float_to_u32(0.0005)),
         (THROTTLER_PD_PARAM_D_GAIN_OVER, _float_to_u32(0.0)),
         (THROTTLER_PD_PARAM_DEADBAND_UNDER, _float_to_u32(0.01)),
         (THROTTLER_PD_PARAM_DEADBAND_OVER, _float_to_u32(0.03)),
@@ -2010,12 +2014,16 @@ def test_throttler_pd_param_asymmetric_loop_smoke(arc_chip_dut, asic_id, board_n
         assert response[0] == 8, "SMC stopped responding after re-tune"
     finally:
         # Restore original params unconditionally so we don't poison the rest
-        # of the suite. I_GAIN goes last because the handler resets the
-        # integrator state on a new i_gain write, giving the loop a clean
-        # starting point with the restored gains.
+        # of the suite. I_GAIN / I_GAIN_OVER go last because the handler
+        # resets the integrator state on either write, giving the loop a
+        # clean starting point with the restored gains.
+        integral_pids = {
+            THROTTLER_PD_PARAM_I_GAIN,
+            THROTTLER_PD_PARAM_I_GAIN_OVER,
+        }
         ordered = sorted(
             snapshot.items(),
-            key=lambda kv: 1 if kv[0] == THROTTLER_PD_PARAM_I_GAIN else 0,
+            key=lambda kv: 1 if kv[0] in integral_pids else 0,
         )
         for pid, bits in ordered:
             _pd_param_set(arc_chip, THROTTLER_ID_TDP, pid, bits)

@@ -99,6 +99,7 @@ static Throttler throttler[kThrottlerCount] = {
 					.i_gain = 0.0f,
 					.d_gain = 0.0f,
 					.p_gain_over = 0.1f,
+					.i_gain_over = 0.0f,
 					.d_gain_over = 0.0f,
 					.deadband_under = 0.01f,
 					.deadband_over = 0.03f,
@@ -294,7 +295,7 @@ static void UpdateThrottler(ThrottlerId id, float value)
 	} else if (err_abs < -deadband_over_thr) {
 		kp = t->params.p_gain_over;
 		kd = t->params.d_gain_over;
-		ki = t->params.i_gain;
+		ki = t->params.i_gain_over;
 		err_for_loop = err_abs;
 	} else {
 		kp = 0.0f;
@@ -540,6 +541,9 @@ int throttler_get_pd_param(ThrottlerId id, enum throttler_pd_param_id param, uin
 	case THROTTLER_PD_PARAM_P_GAIN_OVER:
 		*out_bits = pd_param_to_bits(p->p_gain_over);
 		return 0;
+	case THROTTLER_PD_PARAM_I_GAIN_OVER:
+		*out_bits = pd_param_to_bits(p->i_gain_over);
+		return 0;
 	case THROTTLER_PD_PARAM_D_GAIN_OVER:
 		*out_bits = pd_param_to_bits(p->d_gain_over);
 		return 0;
@@ -591,6 +595,13 @@ int throttler_set_pd_param(ThrottlerId id, enum throttler_pd_param_id param, uin
 		return 0;
 	case THROTTLER_PD_PARAM_P_GAIN_OVER:
 		p->p_gain_over = fvalue;
+		return 0;
+	case THROTTLER_PD_PARAM_I_GAIN_OVER:
+		p->i_gain_over = fvalue;
+		/* Reset the (shared) integrator so a fresh over-limit gain
+		 * doesn't multiply a state built up under the previous tuning.
+		 */
+		throttler[id].integral = 0.0f;
 		return 0;
 	case THROTTLER_PD_PARAM_D_GAIN_OVER:
 		p->d_gain_over = fvalue;
