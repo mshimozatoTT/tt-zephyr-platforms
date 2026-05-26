@@ -5,7 +5,9 @@
  */
 
 #include "aiclk_ppm.h"
+#include "capture_buffer.h"
 #include "dvfs.h"
+#include "power_pattern.h"
 #include "telemetry.h"
 #include "voltage.h"
 #include "vf_curve.h"
@@ -46,18 +48,6 @@ typedef enum {
 	CLOCK_MODE_PPM_UNFORCED = 3
 } ClockControlMode;
 
-#define CLOCK_PATTERN_ROWS CONFIG_TT_BH_ARC_CLOCK_PATTERN_ROWS
-
-/** One stored transition: firmware sequence tick + applied MHz (dense ring, 6 bytes each). */
-struct clock_pattern_event {
-	uint32_t seq;
-	uint16_t mhz;
-} __packed __aligned(2);
-
-BUILD_ASSERT(sizeof(struct clock_pattern_event) == 6);
-
-/* Ring of frequency-change events; host reads via ``clock_pattern`` VMA and GET_CLOCK_PATTERN_INFO. */
-struct clock_pattern_event clock_pattern[CLOCK_PATTERN_ROWS];
 uint32_t clock_sequence_counter;
 /* Next write index in @ref clock_pattern (0 .. CLOCK_PATTERN_ROWS-1); equals event count before wrap. */
 uint32_t clock_pattern_next_data_row;
@@ -80,6 +70,9 @@ static bool clock_seq_reset_on_go_busy;
 static uint32_t clock_capture_duration_ms;
 /* k_uptime_get_32() when capture_duration_ms elapses (0 = not armed). */
 static uint32_t clock_capture_deadline_ms;
+/* Sum/count of applied MHz each sample tick (for GET_CLOCK_PATTERN_INFO average). */
+static uint64_t clock_applied_mhz_tick_sum;
+static uint32_t clock_applied_mhz_tick_count;
 
 typedef struct {
 	bool enabled;
@@ -112,6 +105,11 @@ static AiclkPPM aiclk_ppm = {
 static const struct device *const fwtable_dev = DEVICE_DT_GET(DT_NODELABEL(fwtable));
 
 static bool last_msg_busy;
+
+bool aiclk_last_msg_busy(void)
+{
+	return last_msg_busy;
+}
 
 static uint32_t final_arbiter_count[aiclk_arb_max_count];
 static uint32_t throttler_frozen_mask;
@@ -491,6 +489,9 @@ void clock_counter(void)
 
 	const uint32_t applied_mhz = GetAiclkAppliedMhz();
 
+	clock_applied_mhz_tick_sum += applied_mhz;
+	clock_applied_mhz_tick_count++;
+
 	if (clock_pattern_have_logged_reference &&
 	    applied_mhz == clock_pattern_last_logged_applied_mhz) {
 		return;
@@ -515,8 +516,8 @@ void clock_counter(void)
 		return;
 	}
 
-	clock_pattern[wr].seq = clock_sequence_counter;
-	clock_pattern[wr].mhz = (uint16_t)applied_mhz;
+	clock_pattern_data()[wr].seq = clock_sequence_counter;
+	clock_pattern_data()[wr].mhz = (uint16_t)applied_mhz;
 	clock_pattern_next_data_row = wr + 1U;
 	clock_pattern_have_logged_reference = true;
 	clock_pattern_last_logged_applied_mhz = applied_mhz;
@@ -525,7 +526,7 @@ void clock_counter(void)
 static uint8_t handle_char_clock_counter_start(
 	const struct characterisation_clock_counter_start_submsg *params)
 {
-	memset(clock_pattern, 0, sizeof(clock_pattern));
+	memset(clock_pattern_data(), 0, CAPTURE_CLOCK_BYTES);
 	clock_sequence_counter = 0U;
 	clock_pattern_next_data_row = 0U;
 	clock_pattern_ring_wrapped = 0;
@@ -533,6 +534,8 @@ static uint8_t handle_char_clock_counter_start(
 	clock_pattern_overflow_logged = false;
 	clock_pattern_have_logged_reference = false;
 	clock_pattern_last_logged_applied_mhz = 0;
+	clock_applied_mhz_tick_sum = 0U;
+	clock_applied_mhz_tick_count = 0U;
 	uint32_t delay_ms = params->delay_ms;
 
 	if (delay_ms > 300000U) {
@@ -589,12 +592,18 @@ static uint8_t handle_char_clock_counter_stop(void)
 
 static uint8_t handle_char_clock_pattern_get_info(struct response *response)
 {
-	response->data[1] = (uint32_t)(uintptr_t)clock_pattern;
+	uint32_t avg_mhz = 0U;
+
+	if (clock_applied_mhz_tick_count > 0U) {
+		avg_mhz = (uint32_t)(clock_applied_mhz_tick_sum / clock_applied_mhz_tick_count);
+	}
+
+	response->data[1] = (uint32_t)(uintptr_t)clock_pattern_data();
 	response->data[2] = CLOCK_PATTERN_ROWS;
 	response->data[3] = (uint32_t)sizeof(struct clock_pattern_event);
 	response->data[4] = CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR;
 	response->data[5] = CLOCK_PATTERN_INFO_MAGIC;
-	response->data[6] = clock_pattern_next_data_row;
+	response->data[6] = (avg_mhz << 16) | (clock_pattern_next_data_row & 0xFFFFU);
 	response->data[7] = clock_pattern_ring_wrapped;
 	return 0;
 }
@@ -615,6 +624,8 @@ static uint8_t aiclk_busy_handler(const union request *request, struct response 
 		if (clock_seq_reset_on_go_busy) {
 			clock_sequence_counter = 0U;
 			clock_sample_phase = 0;
+			clock_applied_mhz_tick_sum = 0U;
+			clock_applied_mhz_tick_count = 0U;
 			clock_seq_reset_on_go_busy = false;
 			if (clock_capture_duration_ms > 0U) {
 				clock_capture_deadline_ms =
@@ -625,6 +636,9 @@ static uint8_t aiclk_busy_handler(const union request *request, struct response 
 				LOG_INF("clock_pattern: GO_BUSY — seq reset for compute window");
 			}
 		}
+	}
+	if (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY) {
+		power_pattern_on_go_busy();
 	}
 	aiclk_update_busy();
 	return 0;
@@ -759,6 +773,16 @@ static uint8_t characterisation_handler(const union request *request, struct res
 
 	case TT_SUB_MSG_GET_CLOCK_PATTERN_INFO:
 		return handle_char_clock_pattern_get_info(response);
+
+	case TT_SUB_MSG_START_POWER_COUNTER:
+		return power_pattern_start(
+			&request->characterisation_msg.submsg_data.clock_counter_start);
+
+	case TT_SUB_MSG_STOP_POWER_COUNTER:
+		return power_pattern_stop();
+
+	case TT_SUB_MSG_GET_POWER_PATTERN_INFO:
+		return power_pattern_get_info(response);
 
 	default:
 		LOG_WRN("Unknown characterization submessage ID: 0x%02x",

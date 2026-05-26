@@ -11,6 +11,7 @@ zephyr_library_sources_ifndef(
   bh_power.c
   clock_wave.c
   counter.c
+  capture_buffer.c
   dvfs.c
   efuse.c
   eth.c
@@ -24,6 +25,7 @@ zephyr_library_sources_ifndef(
   noc_init.c
   pcie_dma.c
   pcie_msi.c
+  power_pattern.c
   pvt.c
   regulator.c
   regulator_config.c

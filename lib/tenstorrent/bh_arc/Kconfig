@@ -85,15 +85,23 @@ config TT_BH_ARC_DMFW_PING_TIMEOUT
 	  Timeout for DMFW ping in milliseconds. If the DMFW does not respond within this time,
 	  the ping will be considered failed.
 
-config TT_BH_ARC_CLOCK_PATTERN_ROWS
-	int "Clock pattern: max stored frequency-change events (dense ring)"
-	default 24000
-	range 16 120000
+config TT_BH_ARC_CAPTURE_BUFFER_BYTES
+	int "Shared host capture buffer size in bytes (power + clock_pattern)"
+	default 147456
+	range 4096 524288
 	help
-	  Each event is one (sequence_tick, applied_MHz) pair (6 bytes). Only transitions are stored,
-	  so wall time is much longer than the old sparse grid for the same RAM. Example: 24000
-	  events at ~1 ms between ticks and modest throttling can cover tens of seconds of timeline
-	  in ring mode. Increase further (uses RAM) or use TT_BH_ARC_CLOCK_SAMPLE_DIVISOR to subsample.
+	  Single CSM/SRAM region for simultaneous VCORE TDP (dense uint16 centiwatts) and
+	  AICLK clock_pattern (sparse 6-byte events). Default 147456 (144 KiB).
+
+config TT_BH_ARC_POWER_CAPTURE_BYTES
+	int "Bytes at the start of the capture buffer for power_pattern samples"
+	default 98304
+	range 2 524288
+	help
+	  Must be even. Each sample is 2 bytes (centiwatts). Remaining bytes in
+	  TT_BH_ARC_CAPTURE_BUFFER_BYTES hold clock_pattern events (6 bytes each).
+	  Default 98304 (96 KiB) => 49152 samples at 1 ms (~49 s) with 49152 bytes
+	  (~8192 events) for clock_pattern.
 
 config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
 	bool "Clock pattern ring buffer (keep newest samples when full)"
@@ -110,6 +118,20 @@ config TT_BH_ARC_CLOCK_SAMPLE_DIVISOR
 	help
 	  1 = one row per millisecond. For example 13 gives ~10 s wall time in 771 rows
 	  (771 * 13 ms). Sequence numbers in the grid count stored samples, not elapsed ms.
+
+config TT_BH_ARC_POWER_PATTERN_RING_BUFFER
+	bool "Power pattern ring buffer (keep newest samples when full)"
+	default y
+	help
+	  When full, wrap to index 0 and overwrite oldest samples. When disabled, capture
+	  stops when the linear buffer is full.
+
+config TT_BH_ARC_POWER_SAMPLE_DIVISOR
+	int "Power pattern: record one sample every N DVFS ticks (1 ms each)"
+	default 1
+	range 1 1000
+	help
+	  1 = one sample per millisecond. Time for index i is i * divisor ms.
 
 module = BH_ARC
 module-str = bh_arc

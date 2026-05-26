@@ -8,6 +8,7 @@
 #include "vf_curve.h"
 #include "throttler.h"
 #include "aiclk_ppm.h"
+#include "power_pattern.h"
 #include "voltage.h"
 
 bool dvfs_enabled;
@@ -29,6 +30,7 @@ void DVFSChange(void)
 	VoltageChange();
 	IncreaseAiclk();
 	clock_counter();
+	power_counter();
 }
 
 static void dvfs_work_handler(struct k_work *work)

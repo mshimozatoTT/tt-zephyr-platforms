@@ -194,6 +194,12 @@ enum char_submsg_ids {
 	 * layout magic, fill index. Lets the host read CSM without @c zephyr.elf.
 	 */
 	TT_SUB_MSG_GET_CLOCK_PATTERN_INFO = 0x4,
+	/** @brief Start VCORE power-pattern capture (@ref characterisation_clock_counter_start_submsg) */
+	TT_SUB_MSG_START_POWER_COUNTER = 0x5,
+	/** @brief Stop VCORE power-pattern capture (no payload) */
+	TT_SUB_MSG_STOP_POWER_COUNTER = 0x6,
+	/** @brief Query @c power_pattern layout (no submsg payload) */
+	TT_SUB_MSG_GET_POWER_PATTERN_INFO = 0x7,
 };
 
 /** @} */
