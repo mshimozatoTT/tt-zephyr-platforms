@@ -8,6 +8,7 @@
 #include "aiclk_ppm.h"
 #include "capture_buffer.h"
 #include "cm2dm_msg.h"
+#include "telemetry_internal.h"
 
 #include <string.h>
 
@@ -75,6 +76,10 @@ void power_counter(void)
 		LOG_INF("power_pattern: capture_duration_ms elapsed — capture stopped");
 		return;
 	}
+
+	TelemetryInternalData telemetry;
+
+	ReadTelemetryInternal(2, &telemetry);
 
 	uint32_t wr = power_pattern_next;
 
