@@ -97,6 +97,9 @@ enum tt_smc_msg {
 	/** @brief @ref throttler_pd_param_rqst "Throttler PD parameter get/set request" */
 	TT_SMC_MSG_THROTTLER_PD_PARAM = 0x38,
 
+	/** @brief @ref throttler_asymmetric_en_rqst "Throttler asymmetric-law enable/disable" */
+	TT_SMC_MSG_THROTTLER_ASYMMETRIC_EN = 0x3A,
+
 	/** @brief @ref clock_counter_rqst "Start Clock Counter request" */
 	/** @brief @ref clock_counter_rqst "Start Clock Counter request" (word[1] = delay_ms before
 	 *  first sample; 0 = immediate; word[2] bit0 = defer rows until @ref TT_SMC_MSG_AICLK_GO_BUSY)
@@ -194,9 +197,9 @@ enum char_submsg_ids {
 	 * layout magic, fill index. Lets the host read CSM without @c zephyr.elf.
 	 */
 	TT_SUB_MSG_GET_CLOCK_PATTERN_INFO = 0x4,
-	/** @brief Start VCORE power-pattern capture (@ref characterisation_clock_counter_start_submsg) */
+	/** @brief Start board input power-pattern capture (@ref characterisation_clock_counter_start_submsg) */
 	TT_SUB_MSG_START_POWER_COUNTER = 0x5,
-	/** @brief Stop VCORE power-pattern capture (no payload) */
+	/** @brief Stop board input power-pattern capture (no payload) */
 	TT_SUB_MSG_STOP_POWER_COUNTER = 0x6,
 	/** @brief Query @c power_pattern layout (no submsg payload) */
 	TT_SUB_MSG_GET_POWER_PATTERN_INFO = 0x7,

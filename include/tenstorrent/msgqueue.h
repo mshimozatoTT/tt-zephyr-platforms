@@ -757,6 +757,28 @@ struct throttler_pd_param_rqst {
 	uint32_t value;
 };
 
+/** @brief Host request to enable / disable the asymmetric throttler PD law
+ *
+ * When @c enable is non-zero the throttler runs the asymmetric law
+ * (separate under/over-limit gains, deadbands and slew caps); when zero,
+ * it runs the legacy linear law (single @c p_gain / @c d_gain on
+ * normalised error, no integrator, no deadband, no slew cap). The
+ * integrator and previous-error state are reset on every transition so
+ * the two laws don't poison each other's state.
+ *
+ * Messages of this type are processed by @ref throttler_asymmetric_en_handler.
+ */
+struct throttler_asymmetric_en_rqst {
+	/** @brief The command code corresponding to @ref TT_SMC_MSG_THROTTLER_ASYMMETRIC_EN */
+	uint8_t command_code;
+
+	/** @brief 0 = legacy linear law, non-zero = asymmetric law */
+	uint8_t enable;
+
+	/** @brief Two bytes of padding */
+	uint8_t pad[2];
+};
+
 /** @brief Host request to set the TDP limit
  * @details Messages of this type are processed by @ref set_tdp_limit_handler
  */
@@ -843,7 +865,7 @@ union characterisation_submsg_data {
  *          control the AICLK clock-pattern sampler (see @ref characterisation_clock_counter_start_submsg).
  *          @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO returns layout for host CSM reads (no ELF).
  *          Submessages @ref TT_SUB_MSG_START_POWER_COUNTER, @ref TT_SUB_MSG_STOP_POWER_COUNTER, and
- *          @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO control the VCORE TDP power-pattern sampler
+ *          @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO control the board input power-pattern sampler
  *          (same START payload as clock counter). @c power_pattern[] stores centiwatts at the
  *          start of @c capture_buffer; @c clock_pattern[] follows in the same region (see
  *          @c CONFIG_TT_BH_ARC_CAPTURE_BUFFER_BYTES / @c CONFIG_TT_BH_ARC_POWER_CAPTURE_BYTES).
@@ -1058,6 +1080,9 @@ union request {
 
 	/** @brief A throttler PD-loop parameter get/set request */
 	struct throttler_pd_param_rqst throttler_pd_param;
+
+	/** @brief A throttler asymmetric-law enable/disable request */
+	struct throttler_asymmetric_en_rqst throttler_asymmetric_en;
 
 	/** @brief An EEPROM read or write request */
 	struct eeprom_rqst eeprom;

@@ -4,7 +4,7 @@ import argparse
 import struct
 import pyluwen
 
-TT_SMC_MSG_THROTTLER_PD_PARAM = 0x36
+TT_SMC_MSG_THROTTLER_PD_PARAM = 0x38
 
 OP_GET, OP_SET = 0, 1
 

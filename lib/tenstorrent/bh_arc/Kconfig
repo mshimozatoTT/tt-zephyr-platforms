@@ -113,7 +113,7 @@ config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
 
 config TT_BH_ARC_CLOCK_SAMPLE_DIVISOR
 	int "Clock pattern: record one row every N DVFS ticks (1 ms each)"
-	default 1
+	default 50
 	range 1 1000
 	help
 	  1 = one row per millisecond. For example 13 gives ~10 s wall time in 771 rows

@@ -516,8 +516,34 @@ void clock_counter(void)
 		return;
 	}
 
+	/* Pack the currently-dominant arb_max throttler ID into the high 4 bits
+	 * of @c mhz so each AICLK transition is annotated with the throttler
+	 * that caused it. Layout (host-visible):
+	 *   bits  0..11 : applied AICLK in MHz   (up to 4095 MHz)
+	 *   bits 12..15 : enum @ref aiclk_arb_max value (0..15)
+	 *
+	 * Versioned via @ref CLOCK_PATTERN_INFO_MAGIC v2 (0x02636c70). v1
+	 * parsers will read mhz as raw uint16 and see inflated values when
+	 * the arbiter ID is non-zero; the magic bump forces them to re-sync.
+	 *
+	 * If get_aiclk_effective_arb_max() reports no dominant max arbiter
+	 * (unusual but possible during a transition), we clamp the stored ID
+	 * to @c aiclk_arb_max_count which the host treats as "unknown".
+	 */
+	enum aiclk_arb_max dominant_arb;
+	(void)get_aiclk_effective_arb_max(&dominant_arb);
+
+	uint16_t arb_field = (uint16_t)dominant_arb;
+
+	if (arb_field >= aiclk_arb_max_count) {
+		arb_field = (uint16_t)aiclk_arb_max_count;
+	}
+	arb_field &= 0xFU;
+
+	uint16_t mhz_field = (uint16_t)(applied_mhz & 0xFFFU);
+
 	clock_pattern_data()[wr].seq = clock_sequence_counter;
-	clock_pattern_data()[wr].mhz = (uint16_t)applied_mhz;
+	clock_pattern_data()[wr].mhz = mhz_field | (uint16_t)(arb_field << 12);
 	clock_pattern_next_data_row = wr + 1U;
 	clock_pattern_have_logged_reference = true;
 	clock_pattern_last_logged_applied_mhz = applied_mhz;
@@ -587,8 +613,15 @@ static uint8_t handle_char_clock_counter_stop(void)
 	return 0;
 }
 
-/** Magic for @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO @c data[5] (bytes @c 70 6c 63 01 = @c plc + ver 1). */
-#define CLOCK_PATTERN_INFO_MAGIC 0x01636c70U
+/** Magic for @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO @c data[5]
+ *  (bytes @c 70 6c 63 02 = @c plc + ver 2).
+ *
+ *  v2 packs the dominant arb_max throttler ID into the high 4 bits of the
+ *  per-event @c mhz field (low 12 bits = MHz, high 4 bits = enum
+ *  @ref aiclk_arb_max). v1 stored only raw mhz. The bump forces stale host
+ *  parsers to refuse the data rather than silently misinterpret it.
+ */
+#define CLOCK_PATTERN_INFO_MAGIC 0x02636c70U
 
 static uint8_t handle_char_clock_pattern_get_info(struct response *response)
 {

@@ -7,7 +7,7 @@
 #include "power_pattern.h"
 #include "aiclk_ppm.h"
 #include "capture_buffer.h"
-#include "telemetry_internal.h"
+#include "cm2dm_msg.h"
 
 #include <string.h>
 
@@ -76,10 +76,6 @@ void power_counter(void)
 		return;
 	}
 
-	TelemetryInternalData telemetry;
-
-	ReadTelemetryInternal(1, &telemetry);
-
 	uint32_t wr = power_pattern_next;
 
 	if (IS_ENABLED(CONFIG_TT_BH_ARC_POWER_PATTERN_RING_BUFFER)) {
@@ -101,7 +97,7 @@ void power_counter(void)
 		return;
 	}
 
-	power_pattern_data()[wr] = power_to_centiwatts(telemetry.vcore_power);
+	power_pattern_data()[wr] = power_to_centiwatts((float)GetInputPower());
 	power_pattern_next = wr + 1U;
 }
 

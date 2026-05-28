@@ -42,6 +42,14 @@ static const bool thermal_throttling = true;
  */
 #define THROTTLER_INTEGRAL_CLAMP_LIMIT_FRAC 5.0F
 
+/* Runtime-toggleable: when false, UpdateThrottler() runs the legacy linear
+ * law (single p_gain/d_gain on normalised error, no integrator/deadband/
+ * slew cap) instead of the asymmetric law. Flipped via the
+ * TT_SMC_MSG_THROTTLER_ASYMMETRIC_EN host message. Defaults to true so
+ * existing behaviour is preserved unless the host explicitly opts out.
+ */
+static bool asymmetric_pd_enabled = true;
+
 LOG_MODULE_REGISTER(throttler);
 
 static const struct device *const fwtable_dev = DEVICE_DT_GET(DT_NODELABEL(fwtable));
@@ -78,33 +86,31 @@ typedef struct {
 } Throttler;
 
 /* clang-format off */
-/* The non-TDP throttlers below carry the proportional / derivative values
- * from the previous linear-law implementation. They have NOT been re-tuned
- * for the asymmetric law, in which p_gain / d_gain operate on absolute error
- * in source units (W, A, degC, ...) rather than on a dimensionless
- * normalised error. They are kept here as starting points to be tuned at
- * runtime via TT_SMC_MSG_THROTTLER_PD_PARAM (see scripts/tune_throttler_pd.py).
+/* Only kThrottlerBoardPower ships with a fully populated asymmetric
+ * configuration (under-limit gains, over-limit gains, deadbands and slew
+ * caps). It operates on a power error in watts against the 300 W PSYS
+ * ceiling from the fw_table. The asymmetric path in UpdateThrottler() is
+ * gated to this throttler exclusively so the host toggle
+ * (TT_SMC_MSG_THROTTLER_ASYMMETRIC_EN) cannot accidentally route any other
+ * throttler through the asymmetric law with its asymmetric-extras left at
+ * zero (which would produce du = 0 on over-limit and break those loops).
  *
- * Over-limit gains, deadbands and slew caps default to 0, which makes the
- * loop behave symmetrically (no over-limit asymmetry, no deadband, no slew
- * capping) until those parameters are populated. Only TDP ships with a
- * fully populated asymmetric configuration.
+ * All other throttlers (TDP / FastTDC / TDC / Thm / BoardGDDRThm /
+ * DopplerSlow) carry the proportional / derivative values from the
+ * pre-asymmetric linear-law implementation. They always run the legacy
+ * linear law (operating on the dimensionless normalised error scaled by
+ * kThrottlerAiclkScaleFactor), regardless of the asymmetric toggle. They
+ * can be re-tuned at runtime via TT_SMC_MSG_THROTTLER_PD_PARAM (see
+ * scripts/tune_throttler_pd.py).
  */
 static Throttler throttler[kThrottlerCount] = {
 	[kThrottlerTDP] = {
 			.arb_max = aiclk_arb_max_tdp,
 			.params = {
 					.alpha_filter = 1.0,
-					.p_gain = 0.4f,
-					.i_gain = 0.0f,
-					.d_gain = 0.0f,
-					.p_gain_over = 0.1f,
-					.i_gain_over = 0.0f,
-					.d_gain_over = 0.0f,
-					.deadband_under = 0.01f,
-					.deadband_over = 0.03f,
-					.du_max_up = 50.0f,
-					.du_max_down = -10.0f,
+					.p_gain = 0.015,
+					.i_gain = 0.0,
+					.d_gain = 0.1,
 				},
 		},
 	[kThrottlerFastTDC] = {
@@ -138,9 +144,16 @@ static Throttler throttler[kThrottlerCount] = {
 			.arb_max = aiclk_arb_max_board_power,
 			.params = {
 					.alpha_filter = 1.0,
-					.p_gain = 0.1,
-					.i_gain = 0.0,
-					.d_gain = 0.1,
+					.p_gain = 0.4f,
+					.i_gain = 0.0f,
+					.d_gain = 0.0f,
+					.p_gain_over = 0.1f,
+					.i_gain_over = 0.0f,
+					.d_gain_over = 0.0f,
+					.deadband_under = 0.01f,
+					.deadband_over = 0.03f,
+					.du_max_up = 50.0f,
+					.du_max_down = -10.0f,
 				},
 		},
 	[kThrottlerGDDRThm] = {
@@ -242,11 +255,34 @@ void InitThrottlers(void)
 			  tt_bh_fwtable_get_fw_table(fwtable_dev)->chip_limits.tdc_limit);
 	SetThrottlerLimit(kThrottlerThm,
 			  tt_bh_fwtable_get_fw_table(fwtable_dev)->chip_limits.thm_limit);
-	SetThrottlerLimit(kThrottlerBoardPower, DEFAULT_BOARD_POWER_LIMIT);
+	/* Initialise kThrottlerBoardPower to the board input-power ceiling from
+	 * the fw_table (300 W on P150A). This is the same ceiling
+	 * Dm2CmSetBoardPowerLimit() clamps to when the cable / DMC negotiates a
+	 * value, so starting from chip_limits gives us the full PSYS headroom
+	 * out of the box and lets the asymmetric law on BoardPower actually
+	 * exercise 300 W when no cable-side push happens (typical bring-up /
+	 * characterisation setup).
+	 *
+	 * DEFAULT_BOARD_POWER_LIMIT is kept as a defensive fallback in case the
+	 * fw_table reports a zero ceiling (which would otherwise wedge the
+	 * throttler at 0 W).
+	 */
+	{
+		uint32_t board_limit =
+			tt_bh_fwtable_get_fw_table(fwtable_dev)->chip_limits.board_power_limit;
+		if (board_limit == 0) {
+			board_limit = DEFAULT_BOARD_POWER_LIMIT;
+		}
+		SetThrottlerLimit(kThrottlerBoardPower, board_limit);
+	}
+	/* kThrottlerDopplerSlow keeps the pre-asymmetric default: 150 W until
+	 * Dm2CmSetBoardPowerLimit() pushes a cable-negotiated value (capped at
+	 * chip_limits.board_power_limit). Matches the legacy behaviour exactly
+	 * so the asymmetric A/B test cannot accidentally exercise DopplerSlow.
+	 */
+	SetThrottlerLimit(kThrottlerDopplerSlow, DEFAULT_BOARD_POWER_LIMIT);
 	SetThrottlerLimit(kThrottlerGDDRThm,
 			  tt_bh_fwtable_get_fw_table(fwtable_dev)->chip_limits.gddr_thm_limit);
-
-	SetThrottlerLimit(kThrottlerDopplerSlow, DEFAULT_BOARD_POWER_LIMIT);
 
 	InitKernelThrottling();
 
@@ -278,6 +314,30 @@ static void UpdateThrottler(ThrottlerId id, float value)
 
 	/* Telemetry-facing normalised error. */
 	t->error = (t->limit - t->value) / t->limit;
+
+	/* The asymmetric law currently only ships with a fully populated config
+	 * on kThrottlerBoardPower (under-limit/over-limit gains, deadbands and
+	 * slew caps). All other throttlers carry legacy linear-law gains only
+	 * and would behave incorrectly under the asymmetric path (du = 0 when
+	 * over-limit, because p_gain_over/d_gain_over/du_max_down all default
+	 * to 0). Gate the asymmetric path explicitly to BoardPower so the host
+	 * toggle can't accidentally cripple the other throttlers.
+	 */
+	if (!asymmetric_pd_enabled || id != kThrottlerBoardPower) {
+		/* Legacy linear law (pre-asymmetric-PD-loop behaviour): operate on
+		 * the dimensionless normalised error, no integrator, no deadband,
+		 * no slew cap. The @c prev_err_abs slot is reused to hold the
+		 * previous normalised error in this mode; it is reset to 0 on
+		 * every law transition by the host-facing toggle handler.
+		 */
+		float prev_norm = t->prev_err_abs;
+		float output = t->params.p_gain * t->error +
+			       t->params.d_gain * (t->error - prev_norm);
+
+		t->prev_err_abs = t->error;
+		t->du = output * kThrottlerAiclkScaleFactor;
+		return;
+	}
 
 	float err_abs = t->limit - t->value;
 	float deadband_under_thr = t->params.deadband_under * t->limit;
@@ -669,3 +729,27 @@ static uint8_t throttler_pd_param_handler(const union request *request, struct r
 }
 
 REGISTER_MESSAGE(TT_SMC_MSG_THROTTLER_PD_PARAM, throttler_pd_param_handler);
+
+static uint8_t throttler_asymmetric_en_handler(const union request *request,
+					       struct response *response)
+{
+	bool en = (request->throttler_asymmetric_en.enable != 0);
+
+	if (en != asymmetric_pd_enabled) {
+		asymmetric_pd_enabled = en;
+		/* Reset per-throttler state so the new law does not start
+		 * from state accumulated under the previous law. (In particular
+		 * the meaning of @c prev_err_abs differs between the two laws.)
+		 */
+		for (ThrottlerId i = 0; i < kThrottlerCount; i++) {
+			throttler[i].integral = 0.0f;
+			throttler[i].prev_err_abs = 0.0f;
+			throttler[i].du = 0.0f;
+		}
+		LOG_INF("BoardPower asymmetric law %s",
+			en ? "ENABLED" : "DISABLED (legacy linear)");
+	}
+	return 0;
+}
+
+REGISTER_MESSAGE(TT_SMC_MSG_THROTTLER_ASYMMETRIC_EN, throttler_asymmetric_en_handler);

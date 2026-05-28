@@ -13,7 +13,7 @@
 
 struct response;
 
-/** Sample VCORE TDP once per DVFS tick while capture is armed (see characterization START). */
+/** Sample board input power once per DVFS tick while capture is armed (see characterization START). */
 void power_counter(void);
 
 /** Call from AICLK GO_BUSY handler when power capture defers on GO_BUSY. */

@@ -8,7 +8,7 @@ chip_limits {
   vdd_min: 700
   voltage_margin: 25
   tdp_limit: 150
-  tdc_limit: 200
+  tdc_limit: 250
   thm_limit: 90
   tdc_fast_limit: 220
   therm_trip_l1_limit: 0
@@ -28,7 +28,7 @@ feature_enable {
   smbus_en: false
   fan_ctrl_en: false
   harvesting_en: true
-  doppler_en: true
+  doppler_en: false
 }
 
 fan_table {
