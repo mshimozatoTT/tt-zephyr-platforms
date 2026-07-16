@@ -473,12 +473,29 @@ typedef union {
  */
 #define TAG_FW_ACTIVE_CONFIG_0 79
 
+/** @brief Tensix L1 (VCOREM) regulator output power in watts. */
+#define TAG_VCOREM_POWER 80
+
+/**
+ * @brief GDDR/DRAM block regulator output power in watts.
+ *
+ * Sum of GDDRIO east/west, GDDR VDDR, and GDDR VDDA east/west.
+ */
+#define TAG_GDDR_POWER 81
+
+/**
+ * @brief SERDES block regulator output power in watts.
+ *
+ * Sum of SERDES VDDL / VDD / VDDH (board-dependent).
+ */
+#define TAG_SERDES_POWER 82
+
 /** @} */ /* end of telemetry_tag group */
 
 /* Not a real tag, signifies the last tag in the list.
  * MUST be incremented if new tags are defined.
  */
-#define TAG_COUNT 80
+#define TAG_COUNT 83
 
 /* Telemetry tags are at offset `tag` in the telemetry buffer */
 #define TELEM_OFFSET(tag) (tag)

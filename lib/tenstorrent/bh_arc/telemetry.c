@@ -175,6 +175,9 @@ static struct telemetry_table telemetry_table = {
 		[72] = {TAG_NOP_ON_DURATION, TELEM_OFFSET(TAG_NOP_ON_DURATION)},
 		[73] = {TAG_FW_CAPABILITIES_0, TELEM_OFFSET(TAG_FW_CAPABILITIES_0)},
 		[74] = {TAG_FW_ACTIVE_CONFIG_0, TELEM_OFFSET(TAG_FW_ACTIVE_CONFIG_0)},
+		[75] = {TAG_VCOREM_POWER, TELEM_OFFSET(TAG_VCOREM_POWER)},
+		[76] = {TAG_GDDR_POWER, TELEM_OFFSET(TAG_GDDR_POWER)},
+		[77] = {TAG_SERDES_POWER, TELEM_OFFSET(TAG_SERDES_POWER)},
 	},
 };
 /* clang-format on */
@@ -567,6 +570,7 @@ static void update_telemetry(void)
 	}
 	telemetry[TAG_MAX_GDDR_TEMP] = telemetry_internal_data.gddr_temps.max_temp;
 	telemetry[TAG_INPUT_POWER] = GetInputPower(); /* Input power - reported in W */
+<<<<<<< HEAD
 	telemetry[TAG_SMBUS_ERRORS] = smbus_target_get_error_count(smbus_target_dev);
 	/* reported in W, truncated to uint32_t */
 	telemetry[TAG_GDDR_WEST_IO_POWER] = telemetry_internal_data.gddr_io_power_west;
@@ -574,6 +578,12 @@ static void update_telemetry(void)
 	telemetry[TAG_GDDR_EAST_IO_POWER] = telemetry_internal_data.gddr_io_power_east;
 	telemetry[TAG_NOP_START_COUNT] = GetStartNOPCount();
 	telemetry[TAG_NOP_ON_DURATION] = GetNOPOnDuration(telem_update_interval);
+=======
+	/* Block power rails (W) — Tensix L1, GDDR/DRAM, SERDES */
+	telemetry[TAG_VCOREM_POWER] = GetVcoremPower();
+	telemetry[TAG_GDDR_POWER] = GetGddrPower();
+	telemetry[TAG_SERDES_POWER] = GetSerdesPower();
+>>>>>>> 77e4cd7d (adding serdes, gddr and vcorem to telem tags)
 	telemetry[TAG_TIMER_HEARTBEAT]++; /* Incremented every time the timer is called */
 	SetPostCode(POST_CODE_SRC_CMFW, POST_CODE_TELEMETRY_END);
 }

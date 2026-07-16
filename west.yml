@@ -20,6 +20,13 @@ manifest:
       remote: tenstorrent-forks
       path: modules/lib/librpmi
       revision: 23e94f7007731e91be4de7c1d9c8c48b2173f6a2
+    - name: tf-psa-crypto
+      # Required by Mbed TLS 4.x (MCUboot sysbuild). Explicit because the
+      # pinned zephyr-fork revision does not import this module yet, while
+      # local builds often use a newer Zephyr that expects it.
+      url: https://github.com/zephyrproject-rtos/tf-psa-crypto
+      revision: dc575a2ddcc8cb16275d24c42a52eaf79ebe2231
+      path: modules/crypto/tf-psa-crypto
     - name: zephyr
       remote: tenstorrent
       repo-path: zephyr-fork

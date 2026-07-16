@@ -14,6 +14,8 @@
 #define SERDES_VDD_ADDR             0x31
 #define SERDES_VDDH_ADDR            0x32
 #define GDDR_VDDR_ADDR              0x33
+#define GDDR_VDDA_EAST_ADDR         0x34
+#define GDDR_VDDA_WEST_ADDR         0x35
 #define GDDRIO_WEST_ADDR            0x36
 #define GDDRIO_EAST_ADDR            0x37
 #define CB_GDDR_VDDR_WEST_ADDR      0x54
@@ -37,6 +39,22 @@ void set_vcorem(uint32_t voltage_in_mv);
 void set_gddr_vddr(PcbType board_type, uint32_t voltage_in_mv);
 float GetVcoreCurrent(void);
 float GetVcorePower(void);
+/** @brief Tensix L1 (VCOREM) rail power in watts. */
+float GetVcoremPower(void);
+/**
+ * @brief Sum of GDDR/DRAM regulator output power in watts.
+ *
+ * Includes GDDRIO east/west, GDDR VDDR, and GDDR VDDA east/west on
+ * P150 / P300 / UBB. Returns 0 on unsupported board types.
+ */
+float GetGddrPower(void);
+/**
+ * @brief Sum of SERDES regulator output power in watts.
+ *
+ * Includes SERDES VDDL / VDD / VDDH (VDD omitted on P300 left).
+ * Returns 0 on unsupported board types.
+ */
+float GetSerdesPower(void);
 void SwitchVoutControl(enum VoltageCmdSource source);
 float GetGddrWestIoCurrent(void);
 float GetGddrEastIoCurrent(void);

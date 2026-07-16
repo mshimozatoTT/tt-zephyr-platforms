@@ -149,6 +149,96 @@ float GetVcorePower(void)
 	return ConvertLinear11ToFloat(pout);
 }
 
+/* The function returns the Tensix L1 (VCOREM) power in W. */
+float GetVcoremPower(void)
+{
+	I2CInit(I2CMst, P0V8_VCOREM_ADDR, I2CFastMode, PMBUS_MST_ID);
+	uint16_t pout;
+
+	I2CReadBytes(PMBUS_MST_ID, READ_POUT, PMBUS_CMD_BYTE_SIZE, (uint8_t *)&pout,
+		     READ_POUT_DATA_BYTE_SIZE, PMBUS_FLIP_BYTES);
+	return ConvertLinear11ToFloat(pout);
+}
+
+/*
+ * MPM3695 / MPQ8655 power from READ_VOUT + READ_IOUT.
+ * vout_mv = (READ_VOUT[12:0] * 1.25 * scaler), iout_A = (READ_IOUT[12:0] * 0.0625)
+ */
+static float get_mps_vr_power(uint32_t slave_addr, float scaler)
+{
+	uint16_t vout = 0;
+	uint16_t iout = 0;
+	uint32_t err;
+
+	I2CInit(I2CMst, slave_addr, I2CFastMode, PMBUS_MST_ID);
+	err = I2CReadBytes(PMBUS_MST_ID, READ_VOUT, PMBUS_CMD_BYTE_SIZE, (uint8_t *)&vout,
+			   READ_VOUT_DATA_BYTE_SIZE, PMBUS_FLIP_BYTES);
+	if (err) {
+		return 0.0f;
+	}
+	err = I2CReadBytes(PMBUS_MST_ID, READ_IOUT, PMBUS_CMD_BYTE_SIZE, (uint8_t *)&iout,
+			   READ_IOUT_DATA_BYTE_SIZE, PMBUS_FLIP_BYTES);
+	if (err) {
+		return 0.0f;
+	}
+
+	float vout_mv = (float)(vout & 0x1FFFU) * 1.25f * scaler;
+	float iout_a = (float)(iout & 0x1FFFU) * 0.0625f;
+
+	return vout_mv * 0.001f * iout_a;
+}
+
+/* Feedback / sense scalers matching host-side board.py for P150/P300/UBB. */
+#define MPM3695_SERDES_VDDL_SCALER (0.75f / 1.8f)
+#define MPM3695_SERDES_VDD_SCALER  (0.75f / 1.8f)
+#define MPM3695_SERDES_VDDH_SCALER (1.2f / 1.8f)
+#define MPM3695_GDDR_VDDR_SCALER   (0.85f / 1.8f)
+#define MPM3695_GDDR_VDDA_SCALER   (0.85f / 1.8f)
+#define MPQ8655_GDDRIO_SCALER_P150 1.0f
+#define MPQ8655_GDDRIO_SCALER_UBB  (1.39f / 1.35f)
+
+float GetGddrPower(void)
+{
+	PcbType board_type = tt_bh_fwtable_get_pcb_type(fwtable_dev);
+	float gddrio_scaler;
+	float power = 0.0f;
+
+	if (board_type == PcbTypeP150 || board_type == PcbTypeP300) {
+		gddrio_scaler = MPQ8655_GDDRIO_SCALER_P150;
+	} else if (board_type == PcbTypeUBB) {
+		gddrio_scaler = MPQ8655_GDDRIO_SCALER_UBB;
+	} else {
+		return 0.0f;
+	}
+
+	power += get_mps_vr_power(GDDRIO_EAST_ADDR, gddrio_scaler);
+	power += get_mps_vr_power(GDDRIO_WEST_ADDR, gddrio_scaler);
+	power += get_mps_vr_power(GDDR_VDDR_ADDR, MPM3695_GDDR_VDDR_SCALER);
+	power += get_mps_vr_power(GDDR_VDDA_EAST_ADDR, MPM3695_GDDR_VDDA_SCALER);
+	power += get_mps_vr_power(GDDR_VDDA_WEST_ADDR, MPM3695_GDDR_VDDA_SCALER);
+
+	return power;
+}
+
+float GetSerdesPower(void)
+{
+	PcbType board_type = tt_bh_fwtable_get_pcb_type(fwtable_dev);
+	float power = 0.0f;
+
+	if (board_type != PcbTypeP150 && board_type != PcbTypeP300 && board_type != PcbTypeUBB) {
+		return 0.0f;
+	}
+
+	power += get_mps_vr_power(SERDES_VDDL_ADDR, MPM3695_SERDES_VDDL_SCALER);
+	/* P300 left ASIC does not have its own SERDES_VDD regulator */
+	if (!(board_type == PcbTypeP300 && tt_bh_fwtable_is_p300_left_chip())) {
+		power += get_mps_vr_power(SERDES_VDD_ADDR, MPM3695_SERDES_VDD_SCALER);
+	}
+	power += get_mps_vr_power(SERDES_VDDH_ADDR, MPM3695_SERDES_VDDH_SCALER);
+
+	return power;
+}
+
 static void set_max20730(uint32_t slave_addr, uint32_t voltage_in_mv, float rfb1, float rfb2)
 {
 	I2CInit(I2CMst, slave_addr, I2CFastMode, PMBUS_MST_ID);

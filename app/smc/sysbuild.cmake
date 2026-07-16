@@ -158,6 +158,10 @@ endif()
 set(DTS_FILE ${CMAKE_BINARY_DIR}/${DEFAULT_IMAGE}/zephyr/zephyr.dts)
 set(GEN_SCRIPT ${APP_DIR}/../../scripts/tt_boot_fs.py)
 set(OUTPUT_FILE ${CMAKE_BINARY_DIR}/tt_boot_fs.yaml)
+# Prefer Zephyr's bundled edtlib so bindings keys (e.g. "examples") match the tree.
+if(NOT PYTHON_DEVICETREE_SRC)
+  set(PYTHON_DEVICETREE_SRC ${ZEPHYR_BASE}/scripts/dts/python-devicetree/src)
+endif()
 
 # Generates boot filesystem YAML from devicetrees
 add_custom_command(
