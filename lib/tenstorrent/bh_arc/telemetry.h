@@ -490,12 +490,15 @@ typedef union {
  */
 #define TAG_SERDES_POWER 82
 
+/** @brief Tensix / ASIC core (VCORE) regulator output power in watts. */
+#define TAG_VCORE_POWER 83
+
 /** @} */ /* end of telemetry_tag group */
 
 /* Not a real tag, signifies the last tag in the list.
  * MUST be incremented if new tags are defined.
  */
-#define TAG_COUNT 83
+#define TAG_COUNT 84
 
 /* Telemetry tags are at offset `tag` in the telemetry buffer */
 #define TELEM_OFFSET(tag) (tag)
