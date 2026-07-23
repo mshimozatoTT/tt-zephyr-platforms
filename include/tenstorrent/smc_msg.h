@@ -178,6 +178,8 @@ enum char_submsg_ids {
 	TT_SUB_MSG_SET_KERNEL_THROTTLER_ENABLED = 0x2,
 	/** @brief Set frequency limit for stopping kernel throttler */
 	TT_SUB_MSG_SET_KERNEL_THROTTLER_STOP_NOPS_FREQ = 0x3,
+	/** @brief Enable adding serdes, gddr and vcorem to telemetry */
+	TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM = 0x4,
 };
 
 /** @} */

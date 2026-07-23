@@ -796,6 +796,16 @@ struct char_throttle_stop_freq_submsg {
 	uint32_t frequency;
 };
 
+/** @brief Submessage for enabling block-power telemetry tags
+ * @details Payload is a single uint32_t:
+ * - Value == 0: Disable SERDES / GDDR / VCOREM (/ VCORE) power telemetry updates
+ * - Value == 1: Enable SERDES / GDDR / VCOREM (/ VCORE) power telemetry updates
+ */
+struct char_block_power_telem_submsg {
+	/** @brief 0 to disable, 1 to enable */
+	uint32_t enabled;
+};
+
 /** @brief Union of all possible characterization submessage payloads */
 union characterisation_submsg_data {
 	/** @brief Set host-requested minimum frequency floor */
@@ -804,6 +814,8 @@ union characterisation_submsg_data {
 	struct char_throttle_enabled_submsg throttler_enabled;
 	/** @brief Set frequency limit for stopping kernel throttler */
 	struct char_throttle_stop_freq_submsg throttler_stop_freq;
+	/** @brief Enable/disable SERDES / GDDR / VCOREM power telemetry */
+	struct char_block_power_telem_submsg block_power_telem;
 	/* add to this union to define more sub-message payloads */
 	/** @brief Generic fallback for raw access */
 	uint8_t raw_data[4];

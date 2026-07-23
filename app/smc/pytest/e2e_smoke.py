@@ -128,6 +128,7 @@ ETH_RESET_ERR_INVALID_MASK = 1
 TT_SUB_MSG_SET_HOST_REQUESTED_FMIN = 0x1
 TT_SUB_MSG_SET_KERNEL_THROTTLER_ENABLED = 0x2
 TT_SUB_MSG_SET_KERNEL_THROTTLER_STOP_NOPS_FREQ = 0x3
+TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM = 0x4
 
 # Telemetry tags
 TAG_TDP = 7
@@ -140,10 +141,13 @@ TAG_ASIC_ID_HIGH = 61
 TAG_ASIC_ID_LOW = 62
 TAG_HOST_AICLK_LIMIT = 70
 TAG_KERNEL_THROTTLER = 75
-TAG_VCOREM_POWER = 71  # Tensix L1 (VCOREM)
-TAG_GDDR_POWER = 72    # GDDR/DRAM block
-TAG_SERDES_POWER = 73  # SERDES block
-TAG_VCORE_POWER = 74   # Tensix / ASIC core (VCORE)
+TAG_FW_CAPABILITIES_0 = 78
+TAG_FW_ACTIVE_CONFIG_0 = 79
+TAG_VCOREM_POWER = 80  # Tensix L1 (VCOREM)
+TAG_GDDR_POWER = 81    # GDDR/DRAM block
+TAG_SERDES_POWER = 82  # SERDES block
+TAG_VCORE_POWER = 83   # Tensix / ASIC core (VCORE)
+SERDES_GDDR_VCOREM_TELEM_BIT = 1  # bit 1 in TAG_FW_*_0
 
 NUM_PD = 16
 NUM_VM = 8
@@ -1848,6 +1852,73 @@ def test_characterisation_kernel_throttler(arc_chip_dut, asic_id):
     # Restore the baseline configuration.
     set_enabled(baseline & 1)
     set_stop_freq((baseline >> 16) & 0xFFFF)
+
+
+def test_characterisation_block_power_telem(arc_chip_dut, asic_id):
+    """
+    Validates TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM.
+
+    When enabled, SERDES / GDDR / VCOREM / VCORE power tags are updated and
+    bit 1 of TAG_FW_ACTIVE_CONFIG_0 is set.
+    """
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    caps = read_telem(arc_chip, TAG_FW_CAPABILITIES_0)
+    assert caps & (1 << SERDES_GDDR_VCOREM_TELEM_BIT), (
+        "TAG_FW_CAPABILITIES_0 missing serdes_gddr_vcorem_telem bit"
+    )
+
+    def set_enabled(value):
+        return arc_chip.as_bh().arc_msg_buf(
+            [
+                TT_SMC_MSG_CHARACTERISATION
+                | TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM << 8,
+                value,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ]
+        )
+
+    # Feature starts disabled.
+    assert read_telem(arc_chip, TAG_FW_ACTIVE_CONFIG_0) & (
+        1 << SERDES_GDDR_VCOREM_TELEM_BIT
+    ) == 0, "block power telemetry unexpectedly enabled at boot"
+
+    response = set_enabled(1)
+    assert response[0] == 0, "Failed to enable block power telemetry"
+    time.sleep(0.5)
+
+    active = read_telem(arc_chip, TAG_FW_ACTIVE_CONFIG_0)
+    assert active & (1 << SERDES_GDDR_VCOREM_TELEM_BIT), (
+        "TAG_FW_ACTIVE_CONFIG_0 bit not set after enable"
+    )
+
+    # Tags should be readable once enabled (values are board-dependent).
+    for tag, name in (
+        (TAG_VCOREM_POWER, "VCOREM"),
+        (TAG_GDDR_POWER, "GDDR"),
+        (TAG_SERDES_POWER, "SERDES"),
+        (TAG_VCORE_POWER, "VCORE"),
+    ):
+        value = read_telem(arc_chip, tag)
+        logger.info(f"{name} power telemetry: {value} W")
+
+    assert set_enabled(2)[0] != 0, "Expected error for invalid enable value"
+
+    response = set_enabled(0)
+    assert response[0] == 0, "Failed to disable block power telemetry"
+    time.sleep(0.2)
+    assert read_telem(arc_chip, TAG_FW_ACTIVE_CONFIG_0) & (
+        1 << SERDES_GDDR_VCOREM_TELEM_BIT
+    ) == 0, "TAG_FW_ACTIVE_CONFIG_0 bit still set after disable"
+    assert read_telem(arc_chip, TAG_VCOREM_POWER) == 0
+    assert read_telem(arc_chip, TAG_GDDR_POWER) == 0
+    assert read_telem(arc_chip, TAG_SERDES_POWER) == 0
+    assert read_telem(arc_chip, TAG_VCORE_POWER) == 0
 
 
 def test_bindesc(arc_chip_dut, asic_id):

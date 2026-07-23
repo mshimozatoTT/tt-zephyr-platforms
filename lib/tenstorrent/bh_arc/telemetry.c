@@ -264,6 +264,30 @@ void UpdateTelemetryKernelThrottler(bool enabled, uint32_t stop_nops_freq)
 	telemetry[TAG_KERNEL_THROTTLER] = (enabled ? 1U : 0U) | ((stop_nops_freq & 0xFFFFU) << 16U);
 }
 
+uint8_t SetBlockPowerTelemetryEnabled(uint32_t enabled)
+{
+	if (enabled > 1U) {
+		return 1;
+	}
+
+	telemetry_feature_flags_0_t active_config = {
+		.u32_all = telemetry[TAG_FW_ACTIVE_CONFIG_0],
+	};
+
+	active_config.bits.serdes_gddr_vcorem_telem = enabled ? 1U : 0U;
+	telemetry[TAG_FW_ACTIVE_CONFIG_0] = active_config.u32_all;
+
+	if (!enabled) {
+		telemetry[TAG_VCOREM_POWER] = 0;
+		telemetry[TAG_GDDR_POWER] = 0;
+		telemetry[TAG_SERDES_POWER] = 0;
+		telemetry[TAG_VCORE_POWER] = 0;
+	}
+
+	LOG_INF("block power telemetry %s", enabled ? "enabled" : "disabled");
+	return 0;
+}
+
 telemetry_feature_flags_bits_0_t GetActiveFeatures(void)
 {
 	telemetry_feature_flags_0_t active_config = {
@@ -477,11 +501,14 @@ static void write_static_telemetry(uint32_t app_version)
 	telemetry[TAG_GDDR_MRISC_NOC2AXI_PORT] = get_gddr_mrisc_endpoints();
 
 	fw_capabilities.bits.kernel_nops_at_aiclk_fmin = 1U;
+	fw_capabilities.bits.serdes_gddr_vcorem_telem = 1U;
 	telemetry[TAG_FW_CAPABILITIES_0] = fw_capabilities.u32_all;
 
 	active_config.bits.kernel_nops_at_aiclk_fmin =
 		tt_bh_fwtable_get_fw_table(fwtable_dev)
 			->feature_enable.kernel_throttler_at_floor_en;
+	/* Block-power telemetry starts disabled; host enables via characterisation. */
+	active_config.bits.serdes_gddr_vcorem_telem = 0U;
 	telemetry[TAG_FW_ACTIVE_CONFIG_0] = active_config.u32_all;
 }
 
@@ -578,11 +605,15 @@ static void update_telemetry(void)
 	telemetry[TAG_GDDR_EAST_IO_POWER] = telemetry_internal_data.gddr_io_power_east;
 	telemetry[TAG_NOP_START_COUNT] = GetStartNOPCount();
 	telemetry[TAG_NOP_ON_DURATION] = GetNOPOnDuration(telem_update_interval);
-	/* Block power rails (W) — Tensix L1, GDDR/DRAM, SERDES, VCORE */
-	telemetry[TAG_VCOREM_POWER] = GetVcoremPower();
-	telemetry[TAG_GDDR_POWER] = GetGddrPower();
-	telemetry[TAG_SERDES_POWER] = GetSerdesPower();
-	telemetry[TAG_VCORE_POWER] = GetVcorePower();
+
+	/* Block power rails (W) — gated by TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM */
+	if (GetActiveFeatures().serdes_gddr_vcorem_telem) {
+		telemetry[TAG_VCOREM_POWER] = GetVcoremPower();
+		telemetry[TAG_GDDR_POWER] = GetGddrPower();
+		telemetry[TAG_SERDES_POWER] = GetSerdesPower();
+		telemetry[TAG_VCORE_POWER] = GetVcorePower();
+	}
+
 	telemetry[TAG_TIMER_HEARTBEAT]++; /* Incremented every time the timer is called */
 	SetPostCode(POST_CODE_SRC_CMFW, POST_CODE_TELEMETRY_END);
 }

@@ -537,6 +537,10 @@ static uint8_t characterisation_handler(const union request *request, struct res
 		return ThrottlerSetKernelThrottlerStopFreq(
 			request->characterisation_msg.submsg_data.throttler_stop_freq.frequency);
 
+	case TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM:
+		return SetBlockPowerTelemetryEnabled(
+			request->characterisation_msg.submsg_data.block_power_telem.enabled);
+
 	default:
 		LOG_WRN("Unknown characterization submessage ID: 0x%02x",
 			request->characterisation_msg.submsg_ID);

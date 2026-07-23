@@ -70,8 +70,16 @@ typedef struct {
 	 */
 	uint32_t kernel_nops_at_aiclk_fmin: 1;
 
+	/** @brief SERDES / GDDR / VCOREM (/ VCORE) block-power telemetry feature.
+	 *
+	 * This bit is controlled at runtime by the host with
+	 * @ref TT_SMC_MSG_CHARACTERISATION using
+	 * @ref TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM.
+	 */
+	uint32_t serdes_gddr_vcorem_telem: 1;
+
 	/** @brief Reserved for future use. */
-	uint32_t reserved: 31;
+	uint32_t reserved: 30;
 } telemetry_feature_flags_bits_0_t;
 
 /** @brief Packed 32-bit representation of @ref telemetry_feature_flags_bits_0_t. */
@@ -457,6 +465,8 @@ typedef union {
  * Current assignments:
  * - bit 0 (`kernel_nops_at_aiclk_fmin`): firmware supports the
  *   kernel-throttler-at-AICLK-floor feature.
+ * - bit 1 (`serdes_gddr_vcorem_telem`): firmware supports SERDES / GDDR /
+ *   VCOREM (/ VCORE) block-power telemetry tags.
  */
 #define TAG_FW_CAPABILITIES_0 78
 
@@ -466,20 +476,28 @@ typedef union {
  *
  * Current assignments:
  * - bit 0 (`kernel_nops_at_aiclk_fmin`): kernel-throttler-at-AICLK-floor is enabled.
+ * - bit 1 (`serdes_gddr_vcorem_telem`): block-power telemetry updates are enabled.
  *
  * Runtime control:
- * - The host can enable or disable this bit with @ref TT_SMC_MSG_CHARACTERISATION
+ * - The host can enable or disable bit 0 with @ref TT_SMC_MSG_CHARACTERISATION
  *   and @ref TT_SUB_MSG_SET_KERNEL_THROTTLER_ENABLED.
+ * - The host can enable or disable bit 1 with @ref TT_SMC_MSG_CHARACTERISATION
+ *   and @ref TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM.
  */
 #define TAG_FW_ACTIVE_CONFIG_0 79
 
-/** @brief Tensix L1 (VCOREM) regulator output power in watts. */
+/**
+ * @brief Tensix L1 (VCOREM) regulator output power in watts.
+ *
+ * Updated only while @ref TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM is enabled.
+ */
 #define TAG_VCOREM_POWER 80
 
 /**
  * @brief GDDR/DRAM block regulator output power in watts.
  *
  * Sum of GDDRIO east/west, GDDR VDDR, and GDDR VDDA east/west.
+ * Updated only while @ref TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM is enabled.
  */
 #define TAG_GDDR_POWER 81
 
@@ -487,10 +505,15 @@ typedef union {
  * @brief SERDES block regulator output power in watts.
  *
  * Sum of SERDES VDDL / VDD / VDDH (board-dependent).
+ * Updated only while @ref TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM is enabled.
  */
 #define TAG_SERDES_POWER 82
 
-/** @brief Tensix / ASIC core (VCORE) regulator output power in watts. */
+/**
+ * @brief Tensix / ASIC core (VCORE) regulator output power in watts.
+ *
+ * Updated only while @ref TT_SUB_MSG_SET_SERDES_GDDR_VCOREM_TO_TELEM is enabled.
+ */
 #define TAG_VCORE_POWER 83
 
 /** @} */ /* end of telemetry_tag group */
@@ -514,6 +537,11 @@ void UpdateTelemetryTdpLimit(uint32_t tdp_limit);
 void UpdateTelemetryThermTripCount(uint16_t therm_trip_count);
 void UpdateTelemetryHostAiclkLimit(uint32_t fmax);
 void UpdateTelemetryKernelThrottler(bool enabled, uint32_t stop_nops_freq);
+/** @brief Enable/disable SERDES / GDDR / VCOREM (/ VCORE) power telemetry updates.
+ * @param[in] enabled 0 to disable, 1 to enable
+ * @return 0 on success, 1 for invalid @p enabled
+ */
+uint8_t SetBlockPowerTelemetryEnabled(uint32_t enabled);
 /** @brief Get the current active firmware feature bits from @ref TAG_FW_ACTIVE_CONFIG_0.
  * @ingroup telemetry_feature_capabilities
  *
