@@ -17,11 +17,9 @@ import pyluwen
 import pytest
 import get_ttzp_version
 
-
 def strip_ansi_codes(s):
     ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
     return ansi_escape.sub("", s)
-
 
 try:
     from twister_harness import DeviceAdapter
@@ -61,7 +59,6 @@ except ImportError:
     def unlaunched_dut(fwbundle):
         return DeviceAdapter(fwbundle)
 
-
 TTZP = Path(__file__).parents[3]
 sys.path.append(str(TTZP / "scripts"))
 from pcie_utils import rescan_pcie  # noqa: E402
@@ -72,10 +69,8 @@ logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 
-
 def _skip_boards(board_name) -> bool:
     return board_name in ("loudbox", "quietbox2") or "galaxy" in board_name.lower()
-
 
 REFCLK_HZ = 50_000_000
 
@@ -118,11 +113,31 @@ TT_SMC_MSG_SET_TDP_LIMIT = 0x22
 TT_SMC_MSG_SET_ASIC_HOST_FMAX = 0x23
 TT_SMC_MSG_CHARACTERISATION = 0xC6
 TT_SMC_MSG_COUNTER = 0x35
+TT_SMC_MSG_THROTTLER_PD_PARAM = 0x38
 TT_SMC_MSG_TOGGLE_GDDR_RESET = 0xB6
 TT_SMC_MSG_TOGGLE_ETH_RESET = 0xB0
 
 # ETH toggle reset (eth_tile_reset_rqst) — response[1] uses eth_reset_err from ARC
 ETH_RESET_ERR_INVALID_MASK = 1
+
+# Throttler PD-param message ops, throttler ids, and param ids
+# (keep in sync with throttler.h)
+THROTTLER_PD_PARAM_OP_GET = 0
+THROTTLER_PD_PARAM_OP_SET = 1
+
+THROTTLER_ID_TDP = 0
+
+THROTTLER_PD_PARAM_ALPHA_FILTER = 0
+THROTTLER_PD_PARAM_P_GAIN = 1
+THROTTLER_PD_PARAM_D_GAIN = 2
+THROTTLER_PD_PARAM_P_GAIN_OVER = 3
+THROTTLER_PD_PARAM_D_GAIN_OVER = 4
+THROTTLER_PD_PARAM_DEADBAND_UNDER = 5
+THROTTLER_PD_PARAM_DEADBAND_OVER = 6
+THROTTLER_PD_PARAM_DU_MAX_UP = 7
+THROTTLER_PD_PARAM_DU_MAX_DOWN = 8
+THROTTLER_PD_PARAM_I_GAIN = 9
+THROTTLER_PD_PARAM_I_GAIN_OVER = 10
 
 # Characterization submessage IDs
 TT_SUB_MSG_SET_HOST_REQUESTED_FMIN = 0x1
@@ -147,18 +162,15 @@ NUM_TS = 8
 
 NUM_ETH = 14
 
-
 def read_telem(arc_chip, telem_idx):
     table_addr = arc_chip.axi_read32(TELEMETRY_DATA_REG_ADDR)
     telem = arc_chip.axi_read32(table_addr + telem_idx * 4)
 
     return telem
 
-
 def read_functional_efuse_word(arc_chip, word_idx):
     func_base = EFUSE_DFT0_MEM_BASE_ADDR + EFUSE_BOX_FUNC * EFUSE_BOX_ADDR_ALIGN
     return arc_chip.axi_read32(func_base + word_idx * 4)
-
 
 def convert_telemetry_to_float(value):
     INT32_MIN = -2147483648
@@ -167,7 +179,6 @@ def convert_telemetry_to_float(value):
         return sys.float_info.max
     else:
         return value / 65536.0
-
 
 @pytest.fixture(scope="session")
 def launched_arc_dut(unlaunched_dut: DeviceAdapter, board_name, asic_id):
@@ -185,7 +196,6 @@ def launched_arc_dut(unlaunched_dut: DeviceAdapter, board_name, asic_id):
     )
     time.sleep(1)  # Wait for ARC to start
     return unlaunched_dut
-
 
 def _verify_running_versions(board_name=None, asic_id=0):
     time.sleep(0.5)
@@ -210,7 +220,6 @@ def _verify_running_versions(board_name=None, asic_id=0):
     )
     assert expected_smcfw == actual_smcfw
     del arc_chip
-
 
 def _prepare_and_launch_dut(
     unlaunched_dut: DeviceAdapter,
@@ -261,7 +270,6 @@ def _prepare_and_launch_dut(
 
     _verify_running_versions(board_name=board_name, asic_id=asic_id)
 
-
 def wait_arc_boot(asic_id, timeout=15):
     start = time.time()
     # Attempt to detect the ARC chip for 15 seconds
@@ -301,7 +309,6 @@ def wait_arc_boot(asic_id, timeout=15):
     logger.info("SMC detected")
     return chips[asic_id]
 
-
 @pytest.fixture()
 def arc_chip_dut(launched_arc_dut, asic_id):
     """
@@ -316,7 +323,6 @@ def arc_chip_dut(launched_arc_dut, asic_id):
     del chip  # So we don't hold stale file descriptors
     return launched_arc_dut
 
-
 def check_chip_count(board_name):
     chips = pyluwen.detect_chips()
     if "galaxy" in board_name:
@@ -330,7 +336,6 @@ def check_chip_count(board_name):
     else:
         assert len(chips) == 1, f"Expected 1 BH chip, found {len(chips)}"
     del chips
-
 
 def upgrade_from_version_test(
     arc_chip_dut,
@@ -420,7 +425,6 @@ def upgrade_from_version_test(
     # Check chip count again
     check_chip_count(board_name)
 
-
 def pvt_comprehensive_test(arc_chip_dut, asic_id):
     fail_count = 0
     arc_chip = pyluwen.detect_chips()[asic_id]
@@ -441,7 +445,6 @@ def pvt_comprehensive_test(arc_chip_dut, asic_id):
                 f"Error {msg_type} response with sensor {sensor_param}: Expected !0,0 Actual: {response[0]},{response[1]}"
             )
     return fail_count
-
 
 def voltage_monitors_test(arc_chip_dut, asic_id):
     arc_chip = pyluwen.detect_chips()[asic_id]
@@ -464,7 +467,6 @@ def voltage_monitors_test(arc_chip_dut, asic_id):
             )
 
     return fail_count
-
 
 def process_detectors_test(arc_chip_dut, asic_id):
     arc_chip = pyluwen.detect_chips()[asic_id]
@@ -492,7 +494,6 @@ def process_detectors_test(arc_chip_dut, asic_id):
 
     return fail_count
 
-
 def temperature_sensors_test(arc_chip_dut, asic_id):
     arc_chip = pyluwen.detect_chips()[asic_id]
     fail_count = 0
@@ -512,7 +513,6 @@ def temperature_sensors_test(arc_chip_dut, asic_id):
 
     return fail_count
 
-
 def test_arc_msg(arc_chip_dut, asic_id):
     """
     Runs a smoke test to verify that the ARC firmware can receive ARC messages
@@ -527,7 +527,6 @@ def test_arc_msg(arc_chip_dut, asic_id):
     status = arc_chip.axi_read32(ARC_STATUS)
     assert status == 0xC0DE003F, "SMC firmware has incorrect status"
 
-
 def test_dmc_msg(arc_chip_dut, asic_id):
     """
     Validates the DMC firmware is alive and responding to pings
@@ -538,7 +537,6 @@ def test_dmc_msg(arc_chip_dut, asic_id):
     assert response[0] == 1, "DMC did not respond to ping from SMC"
     assert response[1] == 0, "SMC response invalid"
     logger.info('DMC ping message response "%d"', response[0])
-
 
 def test_counter_msg(arc_chip_dut, asic_id):
     """
@@ -584,7 +582,6 @@ def test_counter_msg(arc_chip_dut, asic_id):
     )
     assert response[0] == 0, f"Counter CLEAR failed with rc={response[0]}"
 
-
 def test_boot_status(arc_chip_dut, asic_id):
     """
     Validates the boot status of the ARC firmware
@@ -595,7 +592,6 @@ def test_boot_status(arc_chip_dut, asic_id):
 
     assert (status >> 1) & 0x3 == 0x2, "SMC HW boot status is not valid"
     assert err == 0, "FW Init error"
-
 
 def test_smbus_status(arc_chip_dut, asic_id):
     """
@@ -609,7 +605,6 @@ def test_smbus_status(arc_chip_dut, asic_id):
     status = arc_chip.axi_read32(ARC_SCRATCH_63)
     assert status == 0xFEEDFACE, "SMC firmware did not pass SMBUS tests"
     logger.info('SMC SMBUS status: "0x%x"', status)
-
 
 def test_flash_write(arc_chip_dut, asic_id):
     """
@@ -647,7 +642,6 @@ def test_flash_write(arc_chip_dut, asic_id):
             logger.info(f"Write to scratch region: 0x{addr:x} passed")
         logger.info("Flash test %d of %d passed", i + 1, NUM_ITERATIONS)
 
-
 def get_int_version_from_file(filename) -> int:
     with open(filename, "r") as f:
         version_data = f.readlines()
@@ -682,7 +676,6 @@ def get_int_version_from_file(filename) -> int:
         | version_rc
     )
     return version_int
-
 
 def arc_watchdog_test(asic_id):
     """
@@ -771,14 +764,12 @@ def arc_watchdog_test(asic_id):
     logger.info('DMC ping message response "%d"', response[0])
     return True
 
-
 def test_arc_watchdog(arc_chip_dut, asic_id):
     """
     Validates that the DMC firmware watchdog for the ARC will correctly
     reset the chip
     """
     assert arc_watchdog_test(asic_id), "ARC watchdog test failed"
-
 
 def pcie_fw_load_time_test(asic_id):
     """
@@ -817,14 +808,12 @@ def pcie_fw_load_time_test(asic_id):
 
     return True
 
-
 def test_pcie_fw_load_time(arc_chip_dut, asic_id):
     """
     Checks PCIe firmware load time is within 40ms.
     This test needs to be run after production reset.
     """
     assert pcie_fw_load_time_test(asic_id), "PCIe firmware load time test failed"
-
 
 def test_fw_bundle_version(arc_chip_dut, asic_id):
     """
@@ -838,7 +827,6 @@ def test_fw_bundle_version(arc_chip_dut, asic_id):
         f"Firmware bundle version mismatch: {telemetry.fw_bundle_version:#010x} != {exp_bundle_version:#010x}"
     )
     logger.info(f"FW bundle version: {telemetry.fw_bundle_version:#010x}")
-
 
 def test_telemetry_asic_id_from_functional_efuse(arc_chip_dut, asic_id):
     """Validate ASIC ID telemetry tags are sourced from functional efuse words."""
@@ -862,7 +850,6 @@ def test_telemetry_asic_id_from_functional_efuse(arc_chip_dut, asic_id):
         f"efuse=0x{expected_low:08x}"
     )
 
-
 def smi_reset_test(asic_id):
     """
     Helper to run tt-smi reset test. Returns True if test passed, False otherwise
@@ -876,7 +863,6 @@ def smi_reset_test(asic_id):
         smc_test_recovery.recover_smc(asic_id)
 
     return smi_reset_result.returncode == 0
-
 
 def smi_reset_with_eth(asic_id):
     """
@@ -894,7 +880,6 @@ def smi_reset_with_eth(asic_id):
 
     return smi_reset_result.returncode == 0
 
-
 def test_smi_reset(arc_chip_dut, asic_id):
     """
     Checks that tt-smi resets are working successfully
@@ -911,7 +896,6 @@ def test_smi_reset(arc_chip_dut, asic_id):
 
     logger.info(f"'tt-smi -r' failed {fail_count}/{total_tries} times.")
     assert fail_count == 0, "'tt-smi -r' failed a non-zero number of times."
-
 
 def test_smi_reset_with_eth(arc_chip_dut, asic_id):
     """
@@ -937,7 +921,6 @@ def test_smi_reset_with_eth(arc_chip_dut, asic_id):
     assert fail_count == 0, (
         "'tt-smi -r' with ethernet training failed a non-zero number of times."
     )
-
 
 def dirty_reset_test():
     """
@@ -966,7 +949,6 @@ def dirty_reset_test():
         return False
     return True
 
-
 @pytest.mark.skipif(
     "os.getenv('BOARD') in ('bh-galaxy', 'loudbox', 'quietbox2')",
     reason="Galaxy: no DMC path; Loudbox/Quietbox2: no STLink for OpenOCD dirty reset",
@@ -991,7 +973,6 @@ def test_dirty_reset():
 
     logger.info(f"dirty reset failed {fail_count}/{total_tries} times.")
     assert fail_count == 0, "dirty reset failed a non-zero number of times."
-
 
 def tensix_reset_sequence(arc_chip):
     """
@@ -1022,7 +1003,6 @@ def tensix_reset_sequence(arc_chip):
 
     # Unforce AICLK
     arc_chip.arc_msg(TT_SMC_MSG_FORCE_AICLK, arg0=0, arg1=0)
-
 
 def test_tensix_reset(arc_chip_dut, asic_id):
     """
@@ -1063,7 +1043,6 @@ def test_tensix_reset(arc_chip_dut, asic_id):
 
         logger.info(f"Tensix reset test iteration {i} passed")
 
-
 def _logical_tensix_x_coords(enabled_cols: int) -> list[int]:
     """Return valid logical NOC0 X coordinates for enabled tensix columns.
 
@@ -1075,7 +1054,6 @@ def _logical_tensix_x_coords(enabled_cols: int) -> list[int]:
     left_count = min(7, num_enabled)
     right_count = max(0, num_enabled - 7)
     return list(range(1, 1 + left_count)) + list(range(10, 10 + right_count))
-
 
 def test_tensix_reset_single(arc_chip_dut, asic_id):
     """
@@ -1146,7 +1124,6 @@ def test_tensix_reset_single(arc_chip_dut, asic_id):
 
     assert failed == 0, f"{failed}/{len(all_tiles)} tiles failed"
 
-
 def test_aiclk(arc_chip_dut, asic_id):
     arc_chip = pyluwen.detect_chips()[asic_id]
     TARGET_AICLKS = [
@@ -1162,7 +1139,6 @@ def test_aiclk(arc_chip_dut, asic_id):
         aiclk = arc_chip.arc_msg(TT_SMC_MSG_GET_AICLK)[0]
         assert aiclk == clk, f"Failed to set clock to {clk} MHz"
         logger.info(f"AICLK set to {aiclk} MHz successfully")
-
 
 def test_mcuboot(unlaunched_dut, asic_id):
     """
@@ -1235,7 +1211,6 @@ def test_mcuboot(unlaunched_dut, asic_id):
     arc_chip.as_bh().spi_read(MCUBOOT_HEADER_ADDR, buf)
     magic = int.from_bytes(buf, "little")
 
-
 def test_temperature_sensors(arc_chip_dut, asic_id):
     """
     Validates that the temperature sensor messages work and relay responses within reasonable bounds
@@ -1244,7 +1219,6 @@ def test_temperature_sensors(arc_chip_dut, asic_id):
     The expectation is that the temperature returned is between 40 and 70
     """
     assert 0 == temperature_sensors_test(arc_chip_dut, asic_id)
-
 
 def test_process_detectors(arc_chip_dut, asic_id):
     """
@@ -1255,7 +1229,6 @@ def test_process_detectors(arc_chip_dut, asic_id):
     """
     assert 0 == process_detectors_test(arc_chip_dut, asic_id), "test_pvt_msgs failed"
 
-
 def test_voltage_monitors(arc_chip_dut, asic_id):
     """
     Validates that the voltage monitor messages work and relay responses within reasonable bounds
@@ -1265,7 +1238,6 @@ def test_voltage_monitors(arc_chip_dut, asic_id):
     """
     assert 0 == voltage_monitors_test(arc_chip_dut, asic_id), "test_pvt_msgs failed"
 
-
 def test_pvt_comprehensive(arc_chip_dut, asic_id):
     """
     Validates that the PVT messages work and relay responses within reasonable bounds
@@ -1274,7 +1246,6 @@ def test_pvt_comprehensive(arc_chip_dut, asic_id):
     The expectation is that the SMC response to these messages is 0.
     """
     assert 0 == pvt_comprehensive_test(arc_chip_dut, asic_id), "test_pvt_msgs failed"
-
 
 def power_state_toggle_test(arc_chip_dut, asic_id, board_name):
     """
@@ -1322,7 +1293,6 @@ def power_state_toggle_test(arc_chip_dut, asic_id, board_name):
 
     return 0
 
-
 def test_power_state_toggle(arc_chip_dut, asic_id, board_name):
     """
     Validates that toggling between high and low power states results in a TDP delta > 90W
@@ -1331,7 +1301,6 @@ def test_power_state_toggle(arc_chip_dut, asic_id, board_name):
     assert 0 == power_state_toggle_test(arc_chip_dut, asic_id, board_name), (
         "power_state_toggle_test failed"
     )
-
 
 def test_eth_live_status(arc_chip_dut, asic_id):
     """
@@ -1376,7 +1345,6 @@ def test_eth_live_status(arc_chip_dut, asic_id):
 
         time.sleep(POLL_INTERVAL_S)
 
-
 def send_eth_toggle_reset(arc_chip, eth_inst_mask, no_fw_reload=False, timeout=None):
     """Send TT_SMC_MSG_TOGGLE_ETH_RESET (eth_tile_reset_rqst).
 
@@ -1397,7 +1365,6 @@ def send_eth_toggle_reset(arc_chip, eth_inst_mask, no_fw_reload=False, timeout=N
         return arc_chip.as_bh().arc_msg_buf(msg, timeout=timeout)
     return arc_chip.as_bh().arc_msg_buf(msg)
 
-
 def eth_id_to_noc0_coords(eth_inst) -> tuple[int, int]:
     PHYS_X_TO_NOC0 = [0, 1, 16, 2, 15, 3, 14, 4, 13, 5, 12, 6, 11, 7, 10, 8, 9]
 
@@ -1405,7 +1372,6 @@ def eth_id_to_noc0_coords(eth_inst) -> tuple[int, int]:
     y = 1  # All ETH tiles are on the same row
 
     return x, y
-
 
 def set_eth_scratch_pre_reset(arc_chip, eth_inst_mask):
     """
@@ -1422,7 +1388,6 @@ def set_eth_scratch_pre_reset(arc_chip, eth_inst_mask):
             noc_id=0, x=x, y=y, addr=TRISC0_RESET_PC_ADDR, data=0xA5A5A5A5
         )
 
-
 def check_eth_scratch_post_reset(arc_chip, eth_inst_mask):
     """
     Verify that the scratch register for the given ETH instances was cleared after reset.
@@ -1436,7 +1401,6 @@ def check_eth_scratch_post_reset(arc_chip, eth_inst_mask):
         scratch = arc_chip.noc_read32(noc_id=0, x=x, y=y, addr=TRISC0_RESET_PC_ADDR)
         assert scratch == 0, f"ETH {eth_inst} scratch register not cleared after reset"
 
-
 def test_eth_toggle_reset_invalid_mask(arc_chip_dut, asic_id):
     """Reject ETH reset bitmask with bits outside the supported instance range."""
     arc_chip = pyluwen.detect_chips()[asic_id]
@@ -1447,7 +1411,6 @@ def test_eth_toggle_reset_invalid_mask(arc_chip_dut, asic_id):
         f"expected ETH_RESET_ERR_INVALID_MASK ({ETH_RESET_ERR_INVALID_MASK}), got {response[1]}"
     )
 
-
 def test_eth_toggle_reset_noop_mask(arc_chip_dut, asic_id):
     """Zero bitmask is a no-op and must return success."""
     arc_chip = pyluwen.detect_chips()[asic_id]
@@ -1456,7 +1419,6 @@ def test_eth_toggle_reset_noop_mask(arc_chip_dut, asic_id):
         f"expected success, got status={response[0]} detail={response[1]}"
     )
     assert response[1] == 0
-
 
 def test_eth_toggle_reset_individual(arc_chip_dut, asic_id):
     """Reset all individual ETH instances."""
@@ -1483,7 +1445,6 @@ def test_eth_toggle_reset_individual(arc_chip_dut, asic_id):
         assert response[1] == (1 << eth_inst) & eth_enabled
         check_eth_scratch_post_reset(arc_chip, (1 << eth_inst) & eth_enabled)
 
-
 def test_eth_toggle_reset_all(arc_chip_dut, asic_id):
     """Reset all ETH instances"""
     arc_chip = pyluwen.detect_chips()[asic_id]
@@ -1505,7 +1466,6 @@ def test_eth_toggle_reset_all(arc_chip_dut, asic_id):
     )
     assert response[1] == eth_enabled
     check_eth_scratch_post_reset(arc_chip, ((1 << NUM_ETH) - 1) & eth_enabled)
-
 
 def test_gddr_reset(arc_chip_dut, asic_id):
     """
@@ -1564,7 +1524,6 @@ def test_gddr_reset(arc_chip_dut, asic_id):
 
     assert fail_count == 0, f"{fail_count} non-harvested GDDR instances failed reset"
 
-
 def test_set_tdp_limit(arc_chip_dut, asic_id):
     """
     Validates that the SET_TDP_LIMIT message works
@@ -1605,7 +1564,6 @@ def test_set_tdp_limit(arc_chip_dut, asic_id):
     assert tdp_limit == orig_tdp_limit, (
         f"TDP limit not restored to {orig_tdp_limit} watts"
     )
-
 
 def test_set_asic_host_fmax(arc_chip_dut, asic_id):
     """
@@ -1657,7 +1615,6 @@ def test_set_asic_host_fmax(arc_chip_dut, asic_id):
     )
     assert response[0] != 0, "Expected error for out-of-range fmax (too low)"
 
-
 def test_set_characterisation_host_fmin(arc_chip_dut, asic_id):
     """
     Validates that the SET_HOST_REQUESTED_FMIN characterization message works.
@@ -1686,7 +1643,6 @@ def test_set_characterisation_host_fmin(arc_chip_dut, asic_id):
     assert response[0] == 0, f"Failed to set host fmin to {NEW_HOST_FMIN} MHz"
     logger.info(f"Successfully set host fmin to {NEW_HOST_FMIN} MHz")
 
-
 def test_restore_characterisation_host_fmin(arc_chip_dut, asic_id):
     """
     Validates that restoring default (disabling) the host fmin floor works.
@@ -1711,7 +1667,6 @@ def test_restore_characterisation_host_fmin(arc_chip_dut, asic_id):
     )
     assert response[0] == 0, "Failed to restore default host fmin"
     logger.info("Successfully restored default host fmin (disabled)")
-
 
 def test_characterisation_host_fmin_out_of_range(arc_chip_dut, asic_id):
     """
@@ -1754,7 +1709,6 @@ def test_characterisation_host_fmin_out_of_range(arc_chip_dut, asic_id):
     )
     assert response[0] != 0, "Expected error for out-of-range fmin (too low)"
     logger.info("Correctly rejected fmin value 100 (too low)")
-
 
 def test_characterisation_kernel_throttler(arc_chip_dut, asic_id):
     """
@@ -1845,6 +1799,326 @@ def test_characterisation_kernel_throttler(arc_chip_dut, asic_id):
     set_enabled(baseline & 1)
     set_stop_freq((baseline >> 16) & 0xFFFF)
 
+def _throttler_pd_param_msg(arc_chip, op, throttler_id, param_id, value_u32=0):
+    """Build and send a TT_SMC_MSG_THROTTLER_PD_PARAM request.
+
+    The header byte layout is: [command_code, op, throttler_id, param_id]
+    packed into word 0, followed by the 32-bit value (either a float bit
+    pattern or a uint32 boolean depending on param_id) in word 1.
+    """
+    header = (
+        TT_SMC_MSG_THROTTLER_PD_PARAM
+        | (op & 0xFF) << 8
+        | (throttler_id & 0xFF) << 16
+        | (param_id & 0xFF) << 24
+    )
+    return arc_chip.as_bh().arc_msg_buf([header, value_u32 & 0xFFFFFFFF, 0, 0, 0, 0, 0, 0])
+
+def _float_to_u32(value: float) -> int:
+    import struct
+
+    return struct.unpack("<I", struct.pack("<f", value))[0]
+
+def _u32_to_float(bits: int) -> float:
+    import struct
+
+    return struct.unpack("<f", struct.pack("<I", bits & 0xFFFFFFFF))[0]
+
+def _pd_param_get(arc_chip, throttler_id, param_id):
+    """Return (status, value_u32) for a GET request."""
+    response = _throttler_pd_param_msg(
+        arc_chip, THROTTLER_PD_PARAM_OP_GET, throttler_id, param_id, 0
+    )
+    return response[0], response[1]
+
+def _pd_param_set(arc_chip, throttler_id, param_id, value_u32):
+    """Return status (0 on success) for a SET request."""
+    response = _throttler_pd_param_msg(
+        arc_chip, THROTTLER_PD_PARAM_OP_SET, throttler_id, param_id, value_u32
+    )
+    return response[0]
+
+def test_throttler_pd_param_get_all_defaults(arc_chip_dut, asic_id):
+    """
+    Smoke check that GET succeeds for every loop parameter on the TDP throttler.
+
+    This verifies the message plumbing (command id, struct packing, dispatch)
+    rather than asserting specific defaults.
+    """
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    PARAM_IDS = [
+        ("ALPHA_FILTER", THROTTLER_PD_PARAM_ALPHA_FILTER),
+        ("P_GAIN", THROTTLER_PD_PARAM_P_GAIN),
+        ("D_GAIN", THROTTLER_PD_PARAM_D_GAIN),
+        ("P_GAIN_OVER", THROTTLER_PD_PARAM_P_GAIN_OVER),
+        ("D_GAIN_OVER", THROTTLER_PD_PARAM_D_GAIN_OVER),
+        ("DEADBAND_UNDER", THROTTLER_PD_PARAM_DEADBAND_UNDER),
+        ("DEADBAND_OVER", THROTTLER_PD_PARAM_DEADBAND_OVER),
+        ("DU_MAX_UP", THROTTLER_PD_PARAM_DU_MAX_UP),
+        ("DU_MAX_DOWN", THROTTLER_PD_PARAM_DU_MAX_DOWN),
+        ("I_GAIN", THROTTLER_PD_PARAM_I_GAIN),
+        ("I_GAIN_OVER", THROTTLER_PD_PARAM_I_GAIN_OVER),
+    ]
+
+    for name, pid in PARAM_IDS:
+        status, bits = _pd_param_get(arc_chip, THROTTLER_ID_TDP, pid)
+        assert status == 0, f"GET {name} failed with rc={status}"
+        logger.info(f"TDP {name} = {_u32_to_float(bits)} (bits=0x{bits:08x})")
+
+def test_throttler_pd_param_set_get_roundtrip(arc_chip_dut, asic_id):
+    """
+    Validates that SET followed by GET returns the value we wrote for a
+    float parameter (P_GAIN) and the integral parameter (I_GAIN).
+
+    The original values are restored at the end so the throttler state is
+    unchanged for other tests.
+    """
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    # Snapshot originals so we can put the throttler back the way we found it.
+    orig_status, orig_pgain_bits = _pd_param_get(
+        arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN
+    )
+    assert orig_status == 0
+    orig_status, orig_igain_bits = _pd_param_get(
+        arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_I_GAIN
+    )
+    assert orig_status == 0
+
+    try:
+        new_pgain = 0.321
+        status = _pd_param_set(
+            arc_chip,
+            THROTTLER_ID_TDP,
+            THROTTLER_PD_PARAM_P_GAIN,
+            _float_to_u32(new_pgain),
+        )
+        assert status == 0, "SET P_GAIN failed"
+
+        status, bits = _pd_param_get(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN
+        )
+        assert status == 0
+        got = _u32_to_float(bits)
+        assert abs(got - new_pgain) < 1e-6, f"P_GAIN round-trip mismatch: {got}"
+        logger.info(f"P_GAIN round-trip OK ({got})")
+
+        new_igain = 0.0025
+        status = _pd_param_set(
+            arc_chip,
+            THROTTLER_ID_TDP,
+            THROTTLER_PD_PARAM_I_GAIN,
+            _float_to_u32(new_igain),
+        )
+        assert status == 0, "SET I_GAIN failed"
+
+        status, bits = _pd_param_get(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_I_GAIN
+        )
+        assert status == 0
+        got = _u32_to_float(bits)
+        assert abs(got - new_igain) < 1e-6, f"I_GAIN round-trip mismatch: {got}"
+        logger.info(f"I_GAIN round-trip OK ({got})")
+    finally:
+        _pd_param_set(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN, orig_pgain_bits
+        )
+        _pd_param_set(
+            arc_chip, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_I_GAIN, orig_igain_bits
+        )
+
+def test_throttler_pd_param_validation(arc_chip_dut, asic_id):
+    """
+    Validates that out-of-range PD-parameter values are rejected by the
+    handler. Sanity-checks that the handler also rejects unknown throttler
+    ids, param ids, and ops, so a bad host script can't corrupt loop state.
+    """
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    # alpha_filter must be in [0, 1].
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_ALPHA_FILTER,
+        _float_to_u32(1.5),
+    )
+    assert status != 0, "alpha_filter > 1 should be rejected"
+
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_ALPHA_FILTER,
+        _float_to_u32(-0.1),
+    )
+    assert status != 0, "alpha_filter < 0 should be rejected"
+
+    # du_max_up must be >= 0, du_max_down must be <= 0.
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DU_MAX_UP,
+        _float_to_u32(-1.0),
+    )
+    assert status != 0, "du_max_up < 0 should be rejected"
+
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DU_MAX_DOWN,
+        _float_to_u32(1.0),
+    )
+    assert status != 0, "du_max_down > 0 should be rejected"
+
+    # Deadbands must be in [0, 1).
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DEADBAND_UNDER,
+        _float_to_u32(-0.01),
+    )
+    assert status != 0, "deadband_under < 0 should be rejected"
+
+    status = _pd_param_set(
+        arc_chip,
+        THROTTLER_ID_TDP,
+        THROTTLER_PD_PARAM_DEADBAND_OVER,
+        _float_to_u32(1.0),
+    )
+    assert status != 0, "deadband_over >= 1 should be rejected"
+
+    # Unknown throttler id (just past the last enum value).
+    INVALID_THROTTLER_ID = 0x7F
+    status, _ = _pd_param_get(
+        arc_chip, INVALID_THROTTLER_ID, THROTTLER_PD_PARAM_P_GAIN
+    )
+    assert status != 0, "GET with invalid throttler id should be rejected"
+
+    # Unknown param id.
+    INVALID_PARAM_ID = 0x7F
+    status, _ = _pd_param_get(arc_chip, THROTTLER_ID_TDP, INVALID_PARAM_ID)
+    assert status != 0, "GET with invalid param id should be rejected"
+
+    # Unknown op.
+    response = _throttler_pd_param_msg(
+        arc_chip, 0x7F, THROTTLER_ID_TDP, THROTTLER_PD_PARAM_P_GAIN, 0
+    )
+    assert response[0] != 0, "Unknown op should be rejected"
+
+def test_throttler_pd_param_asymmetric_loop_smoke(arc_chip_dut, asic_id, board_name):
+    """
+    End-to-end smoke check that re-tuning the TDP throttler's asymmetric
+    loop parameters at runtime (including a non-zero I_GAIN, exercising the
+    integrator path) does not destabilise the system: telemetry stays
+    alive, AICLK keeps moving, and the original throttler state is
+    restored.
+
+    This test does NOT assert any specific control-quality metric; that
+    requires a workload-level benchmark. It only guards against
+    catastrophic regressions (chip hang, telemetry stall, AICLK pinned to
+    fmin) from the loop reacting to a runtime re-tune.
+    """
+    if _skip_boards(board_name):
+        pytest.skip("Asymmetric loop smoke test not run on this board class")
+
+    arc_chip = pyluwen.detect_chips()[asic_id]
+
+    # Snapshot the params we touch so we can restore them at the end.
+    snapshot = {}
+    for pid in (
+        THROTTLER_PD_PARAM_P_GAIN,
+        THROTTLER_PD_PARAM_I_GAIN,
+        THROTTLER_PD_PARAM_D_GAIN,
+        THROTTLER_PD_PARAM_P_GAIN_OVER,
+        THROTTLER_PD_PARAM_I_GAIN_OVER,
+        THROTTLER_PD_PARAM_D_GAIN_OVER,
+        THROTTLER_PD_PARAM_DEADBAND_UNDER,
+        THROTTLER_PD_PARAM_DEADBAND_OVER,
+        THROTTLER_PD_PARAM_DU_MAX_UP,
+        THROTTLER_PD_PARAM_DU_MAX_DOWN,
+    ):
+        status, bits = _pd_param_get(arc_chip, THROTTLER_ID_TDP, pid)
+        assert status == 0, f"GET param {pid} failed: rc={status}"
+        snapshot[pid] = bits
+
+    # Drive the chip into a busy state so the throttler has something to do.
+    try:
+        arc_chip.set_power_state("high")
+    except Exception as e:
+        logger.info(f"No driver support for power state IOCTL: {e}")
+
+    time.sleep(0.5)
+
+    # Program an asymmetric PID configuration: under-limit gains larger,
+    # over-limit gains gentler, modest deadbands, asymmetric slew caps,
+    # plus a small I_GAIN so the integrator path is exercised.
+    program = [
+        (THROTTLER_PD_PARAM_P_GAIN, _float_to_u32(0.4)),
+        (THROTTLER_PD_PARAM_I_GAIN, _float_to_u32(0.001)),
+        (THROTTLER_PD_PARAM_D_GAIN, _float_to_u32(0.0)),
+        (THROTTLER_PD_PARAM_P_GAIN_OVER, _float_to_u32(0.1)),
+        (THROTTLER_PD_PARAM_I_GAIN_OVER, _float_to_u32(0.0005)),
+        (THROTTLER_PD_PARAM_D_GAIN_OVER, _float_to_u32(0.0)),
+        (THROTTLER_PD_PARAM_DEADBAND_UNDER, _float_to_u32(0.01)),
+        (THROTTLER_PD_PARAM_DEADBAND_OVER, _float_to_u32(0.03)),
+        (THROTTLER_PD_PARAM_DU_MAX_UP, _float_to_u32(50.0)),
+        (THROTTLER_PD_PARAM_DU_MAX_DOWN, _float_to_u32(-10.0)),
+    ]
+
+    try:
+        for pid, value in program:
+            status = _pd_param_set(arc_chip, THROTTLER_ID_TDP, pid, value)
+            assert status == 0, f"SET param {pid} failed: rc={status}"
+
+        # Run the loop for ~1 second with the new tuning. The DVFS work
+        # handler ticks every 1 ms, so this is ~1000 control-loop iterations.
+        SAMPLES = 10
+        SETTLE_S = 0.1
+        aiclks = []
+        powers = []
+        for _ in range(SAMPLES):
+            time.sleep(SETTLE_S)
+            aiclk = arc_chip.arc_msg(TT_SMC_MSG_GET_AICLK)[0]
+            input_power = read_telem(arc_chip, TAG_INPUT_POWER)
+            aiclks.append(aiclk)
+            powers.append(input_power)
+
+        logger.info(f"Asymmetric loop AICLK samples: {aiclks}")
+        logger.info(f"Asymmetric loop input power samples: {powers}")
+
+        # Telemetry must still be live (every read above already succeeded).
+        # AICLK must be inside the valid PPM range; pinned at fmin would
+        # indicate the loop is over-throttling, pinned at zero would mean
+        # PLL or telemetry are dead.
+        assert all(200 <= clk <= 1400 for clk in aiclks), (
+            f"AICLK escaped valid range under asymmetric loop: {aiclks}"
+        )
+        # AICLK should not be constant at fmin for the whole window; either
+        # the loop is releasing freq when not power-limited, or the chip is
+        # idle (which is also fine because we kept it in high power state).
+        assert max(aiclks) > 250, (
+            f"AICLK pinned at fmin during asymmetric loop tuning: {aiclks}"
+        )
+
+        # Chip must still answer pings after the re-tune.
+        time.sleep(0.1)
+        response = arc_chip.arc_msg(TT_SMC_MSG_TEST, True, False, 7, 0, 1000)
+        assert response[0] == 8, "SMC stopped responding after re-tune"
+    finally:
+        # Restore original params unconditionally so we don't poison the rest
+        # of the suite. I_GAIN / I_GAIN_OVER go last because the handler
+        # resets the integrator state on either write, giving the loop a
+        # clean starting point with the restored gains.
+        integral_pids = {
+            THROTTLER_PD_PARAM_I_GAIN,
+            THROTTLER_PD_PARAM_I_GAIN_OVER,
+        }
+        ordered = sorted(
+            snapshot.items(),
+            key=lambda kv: 1 if kv[0] in integral_pids else 0,
+        )
+        for pid, bits in ordered:
+            _pd_param_set(arc_chip, THROTTLER_ID_TDP, pid, bits)
 
 def test_bindesc(arc_chip_dut, asic_id):
     """
@@ -1879,7 +2153,6 @@ def test_bindesc(arc_chip_dut, asic_id):
         f"Bindesc version mismatch: 0x{bindesc_version:08x} != expected 0x{smc_version:08x}"
     )
     logger.info(f"Bindesc version: 0x{bindesc_version:08x}")
-
 
 def test_ccfgovr_bh_mod(unlaunched_dut: DeviceAdapter, asic_id: int):
     """
@@ -1972,7 +2245,6 @@ def test_ccfgovr_bh_mod(unlaunched_dut: DeviceAdapter, asic_id: int):
             f"Failed to restore baseline config (rc={restore.returncode}); "
             f"SPI flash may be left modified: {restore.stderr.decode(errors='replace')}"
         )
-
 
 def test_heartbeat_telemetry(arc_chip_dut, asic_id):
     """

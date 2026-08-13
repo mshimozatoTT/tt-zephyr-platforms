@@ -94,6 +94,12 @@ enum tt_smc_msg {
 	/** @brief @ref counter_rqst "Generic Counter Request" */
 	TT_SMC_MSG_COUNTER = 0x35,
 
+	/** @brief @ref throttler_pd_param_rqst "Throttler PD parameter get/set request" */
+	TT_SMC_MSG_THROTTLER_PD_PARAM = 0x38,
+
+	/** @brief @ref throttler_asymmetric_en_rqst "Throttler asymmetric-law enable/disable" */
+	TT_SMC_MSG_THROTTLER_ASYMMETRIC_EN = 0x3A,
+
 	/** @brief @ref force_vdd_rqst "Force VDD voltage request" */
 	TT_SMC_MSG_FORCE_VDD = 0x39,
 

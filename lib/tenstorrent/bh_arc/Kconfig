@@ -137,7 +137,7 @@ config TT_BH_ARC_POWER_CAPTURE_BYTES
 
 config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
 	bool "Clock pattern ring buffer (keep newest samples when full)"
-	default n
+	default y
 	help
 	  When the data row range is full, wrap to row 1 and overwrite. Sequence numbers still
 	  increase monotonically (until uint16 wrap), so host tools sort by sample index for time
@@ -153,7 +153,7 @@ config TT_BH_ARC_CLOCK_SAMPLE_DIVISOR
 
 config TT_BH_ARC_POWER_PATTERN_RING_BUFFER
 	bool "Power pattern ring buffer (keep newest samples when full)"
-	default n
+	default y
 	help
 	  When full, wrap to index 0 and overwrite oldest samples. When disabled, capture
 	  stops when the linear buffer is full.
