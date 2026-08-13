@@ -158,12 +158,13 @@ endif()
 set(DTS_FILE ${CMAKE_BINARY_DIR}/${DEFAULT_IMAGE}/zephyr/zephyr.dts)
 set(GEN_SCRIPT ${APP_DIR}/../../scripts/tt_boot_fs.py)
 set(OUTPUT_FILE ${CMAKE_BINARY_DIR}/tt_boot_fs.yaml)
+set(PYTHON_DEVICETREE_SRC ${ZEPHYR_BASE}/scripts/dts/python-devicetree/src)
 
 # Generates boot filesystem YAML from devicetrees
 add_custom_command(
     OUTPUT ${OUTPUT_FILE}
     COMMAND ${CMAKE_COMMAND} -E env PYTHONPATH=${PYTHON_DEVICETREE_SRC}:$ENV{PYTHONPATH}
-      python3 ${GEN_SCRIPT}
+      ${PYTHON_EXECUTABLE} ${GEN_SCRIPT}
       generate_bootfs
       --board ${BOARD_REVISION}
       --dts-file ${DTS_FILE}

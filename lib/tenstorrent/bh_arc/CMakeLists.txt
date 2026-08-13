@@ -17,6 +17,7 @@ zephyr_library_sources(
   asic_state.c
   avs.c
   cat.c
+  capture_buffer.c
   cm2dm_msg.c
   dw_apb_i2c.c
   harvesting.c
@@ -30,6 +31,7 @@ zephyr_library_sources(
   pcie_msi.c
   pll.c
   post_code.c
+  power_pattern.c
   reset.c
   smbus_target.c
   spi_eeprom.c

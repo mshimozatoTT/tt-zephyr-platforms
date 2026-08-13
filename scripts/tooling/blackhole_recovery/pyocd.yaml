@@ -1,0 +1,4 @@
+flash.timeout.program: 120.0
+flash.timeout.erase_sector: 30.0
+flash.timeout.init: 30.0
+frequency: 500000
