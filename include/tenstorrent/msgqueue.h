@@ -825,6 +825,20 @@ struct char_rail_measurement_submsg {
 	uint8_t pad[2];
 };
 
+/** @brief Submessage for setting the periodic telemetry update interval
+ * @details Payload is a single uint32_t with two interpretations:
+ * - Value == 0: Restore the default update interval
+ * - Any other value: Set the update interval to this value in milliseconds, subject to the
+ *   bounds enforced by the handler
+ *
+ * The new interval takes effect on the next expiry of the telemetry timer and is reflected
+ * in the @ref TAG_UPDATE_TELEM_SPEED telemetry tag.
+ */
+struct char_telemetry_interval_submsg {
+	/** @brief 0 to restore the default, or the update interval in ms */
+	uint32_t interval_ms;
+};
+
 /** @brief Union of all possible characterization submessage payloads */
 union characterisation_submsg_data {
 	/** @brief Set host-requested minimum frequency floor */
@@ -837,6 +851,8 @@ union characterisation_submsg_data {
 	struct char_gddr_therm_trip_enabled_submsg gddr_therm_trip_enabled;
 	/** @brief Add/remove a rail from the DVFS measurement loop */
 	struct char_rail_measurement_submsg rail_measurement;
+	/** @brief Set the periodic telemetry update interval */
+	struct char_telemetry_interval_submsg telemetry_interval;
 	/* add to this union to define more sub-message payloads */
 	/** @brief Generic fallback for raw access */
 	uint8_t raw_data[4];

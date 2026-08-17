@@ -548,6 +548,12 @@ static uint8_t characterisation_handler(const union request *request, struct res
 			request->characterisation_msg.submsg_data.rail_measurement.rail_id,
 			request->characterisation_msg.submsg_data.rail_measurement.enable);
 
+#ifdef CONFIG_BH_FWTABLE
+	case TT_SUB_MSG_SET_TELEMETRY_UPDATE_INTERVAL:
+		return TelemetrySetUpdateInterval(
+			request->characterisation_msg.submsg_data.telemetry_interval.interval_ms);
+#endif
+
 	default:
 		LOG_WRN("Unknown characterization submessage ID: 0x%02x",
 			request->characterisation_msg.submsg_ID);

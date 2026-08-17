@@ -182,6 +182,8 @@ enum char_submsg_ids {
 	TT_SUB_MSG_SET_GDDR_THERM_TRIP_ENABLED = 0x4,
 	/** @brief Add/remove a voltage rail from the DVFS measurement loop */
 	TT_SUB_MSG_SET_RAIL_MEASUREMENT = 0x5,
+	/** @brief Set the periodic telemetry update interval */
+	TT_SUB_MSG_SET_TELEMETRY_UPDATE_INTERVAL = 0x6,
 };
 
 /** @brief Enumeration of the rails that can be measured by the DVFS loop
