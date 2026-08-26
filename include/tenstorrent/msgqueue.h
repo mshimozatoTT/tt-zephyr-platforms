@@ -824,6 +824,20 @@ struct char_telemetry_interval_submsg {
 	uint32_t interval_ms;
 };
 
+/** @brief Characterization submessage: start clock-pattern capture
+ * @details Lays out as @c request word[1] / word[2] after the characterization header word
+ */
+struct characterisation_clock_counter_start_submsg {
+	/** @brief Milliseconds to wait before first sample (capped in firmware) */
+	uint32_t delay_ms;
+	/** @brief Bit 0: defer rows until @ref TT_SMC_MSG_AICLK_GO_BUSY */
+	uint32_t start_samples_on_go_busy;
+	/** @brief Auto-stop capture after this many ms from the active window (0 = until STOP).
+	 *  With GO_BUSY gating, measured from first GO_BUSY after START (when seq resets).
+	 *  Without GO_BUSY, measured from @c delay_ms expiry. Capped in firmware. */
+	uint32_t capture_duration_ms;
+};
+
 /** @brief Union of all possible characterization submessage payloads */
 union characterisation_submsg_data {
 	/** @brief Set host-requested minimum frequency floor */
@@ -836,16 +850,40 @@ union characterisation_submsg_data {
 	struct char_gddr_therm_trip_enabled_submsg gddr_therm_trip_enabled;
 	/** @brief Set the periodic telemetry update interval */
 	struct char_telemetry_interval_submsg telemetry_interval;
+	/** @brief Start clock-pattern counter */
+	struct characterisation_clock_counter_start_submsg clock_counter_start;
 	/* add to this union to define more sub-message payloads */
 	/** @brief Generic fallback for raw access */
-	uint8_t raw_data[4];
+	uint8_t raw_data[12];
 };
 
 /** @brief Generic characterization message for internal SMC use
  * @warning This is an internal interface. Direct use is not recommended
  *          unless implementing new characterization features.
  * @details Uses submsg_ID to dispatch to specific operations.
- *          Messages of this type are processed by @ref characterisation_handler
+ *          Messages of this type are processed by @ref characterisation_handler.
+ *          Submessages @ref TT_SUB_MSG_START_CLOCK_COUNTER and @ref TT_SUB_MSG_STOP_CLOCK_COUNTER
+ *          control the AICLK clock-pattern sampler (see @ref characterisation_clock_counter_start_submsg).
+ *          @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO returns layout for host CSM reads (no ELF).
+ *          Submessages @ref TT_SUB_MSG_START_POWER_COUNTER, @ref TT_SUB_MSG_STOP_POWER_COUNTER, and
+ *          @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO control the VCORE TDP power-pattern sampler
+ *          (same START payload as clock counter). @c power_pattern[] stores centiwatts at the
+ *          start of @c capture_buffer; @c clock_pattern[] follows in the same region (see
+ *          @c CONFIG_TT_BH_ARC_CAPTURE_BUFFER_BYTES / @c CONFIG_TT_BH_ARC_POWER_CAPTURE_BYTES).
+ *
+ *          Response words for @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO (exit code still in @c data[0]
+ *          low bits): @c data[1] = VMA of @c clock_pattern, @c data[2] = event capacity
+ *          (@c CAPTURE_CLOCK_BYTES / 6), @c data[3] = bytes per @c clock_pattern_event,
+ *          @c data[4] = @c CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR, @c data[5] = layout magic
+ *          @c 0x01636c70 (host must match before reading CSM), @c data[6] = low 16 bits
+ *          @c clock_pattern_next_data_row, high 16 bits = mean applied AICLK (MHz) over
+ *          sample ticks in the capture window, @c data[7] = ring wrapped.
+ *
+ *          Response words for @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO: @c data[1] = VMA of
+ *          @c power_pattern (start of @c capture_buffer), @c data[2] = sample capacity
+ *          (@c CAPTURE_POWER_BYTES / 2), @c data[3] = 2 (uint16 centiwatts), @c data[4] = @c CONFIG_TT_BH_ARC_POWER_SAMPLE_DIVISOR,
+ *          @c data[5] = layout magic @c 0x01727770, @c data[6] = @c power_pattern_next,
+ *          @c data[7] = ring wrapped.
  */
 struct characterisation_msg_rqst {
 	/** @brief The command code corresponding to @ref TT_SMC_MSG_CHARACTERISATION */

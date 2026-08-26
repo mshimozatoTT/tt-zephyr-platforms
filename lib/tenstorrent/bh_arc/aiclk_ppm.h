@@ -92,6 +92,8 @@ float GetThrottlerArbMax(enum aiclk_arb_max arb_max);
 uint8_t ForceAiclk(uint32_t freq);
 void SetAiclkResetSafe(bool enable);
 uint32_t GetAiclkTarg(void);
+/** PLL / clock-control readback in MHz (may differ briefly from @ref GetAiclkTarg while ramping). */
+uint32_t GetAiclkAppliedMhz(void);
 uint32_t GetMaxAiclkForVoltage(uint32_t voltage);
 uint32_t GetAiclkFmin(void);
 uint32_t GetAiclkFmax(void);
@@ -104,5 +106,9 @@ union aiclk_targ_freq_info get_targ_aiclk_info(void);
 struct response;
 union request;
 uint8_t throttler_counter_handler(const union request *request, struct response *response);
+
+/** True after the most recent GO_BUSY (false after GO_LONG_IDLE). */
+bool aiclk_last_msg_busy(void);
+void clock_counter(void);
 
 #endif
