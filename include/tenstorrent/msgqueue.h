@@ -843,7 +843,9 @@ union characterisation_submsg_data {
  *          low bits): @c data[1] = VMA of @c clock_pattern, @c data[2] = event capacity
  *          (@c CAPTURE_CLOCK_BYTES / 6), @c data[3] = bytes per @c clock_pattern_event,
  *          @c data[4] = @c CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR, @c data[5] = layout magic
- *          @c 0x01636c70 (host must match before reading CSM), @c data[6] = low 16 bits
+ *          @c 0x02636c70 (v2: mhz bits 0..11 = applied MHz, bits 12..15 =
+ *          dominant @c aiclk_arb_max; host must match before reading CSM),
+ *          @c data[6] = low 16 bits
  *          @c clock_pattern_next_data_row, high 16 bits = mean applied AICLK (MHz) over
  *          sample ticks in the capture window, @c data[7] = ring wrapped.
  *
