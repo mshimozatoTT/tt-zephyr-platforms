@@ -178,6 +178,22 @@ enum char_submsg_ids {
 	TT_SUB_MSG_SET_KERNEL_THROTTLER_ENABLED = 0x2,
 	/** @brief Set frequency limit for stopping kernel throttler */
 	TT_SUB_MSG_SET_KERNEL_THROTTLER_STOP_NOPS_FREQ = 0x3,
+	/** @brief Start AICLK clock-pattern counter (@ref characterisation_clock_counter_start_submsg) */
+	TT_SUB_MSG_START_CLOCK_COUNTER = 0x4,
+	/** @brief Stop AICLK clock-pattern counter (no payload) */
+	TT_SUB_MSG_STOP_CLOCK_COUNTER = 0x5,
+	/** @brief Query @c clock_pattern layout (no submsg payload).
+	 *
+	 * Response @c data[1].. (see @ref characterisation_msg_rqst): VMA, capacity, sample divisor,
+	 * layout magic, fill index. Lets the host read CSM without @c zephyr.elf.
+	 */
+	TT_SUB_MSG_GET_CLOCK_PATTERN_INFO = 0x6,
+	/** @brief Start VCORE power-pattern capture (@ref characterisation_clock_counter_start_submsg) */
+	TT_SUB_MSG_START_POWER_COUNTER = 0x7,
+	/** @brief Stop VCORE power-pattern capture (no payload) */
+	TT_SUB_MSG_STOP_POWER_COUNTER = 0x8,
+	/** @brief Query @c power_pattern layout (no submsg payload) */
+	TT_SUB_MSG_GET_POWER_PATTERN_INFO = 0x9,
 };
 
 /** @} */

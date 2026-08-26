@@ -69,6 +69,7 @@ if(NOT CONFIG_TT_SMC_RECOVERY)
   zephyr_library_sources(
     aiclk_ppm.c
     bh_power.c
+    capture_buffer.c
     clock_wave.c
     counter.c
     dvfs.c
@@ -78,6 +79,7 @@ if(NOT CONFIG_TT_SMC_RECOVERY)
     gddr.c
     i2c_messages.c
     pcie_dma.c
+    power_pattern.c
     pvt.c
     regulator.c
     regulator_config.c
