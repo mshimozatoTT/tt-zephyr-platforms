@@ -109,6 +109,8 @@ uint8_t throttler_counter_handler(const union request *request, struct response 
 
 /** True after the most recent GO_BUSY (false after GO_LONG_IDLE). */
 bool aiclk_last_msg_busy(void);
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 void clock_counter(void);
+#endif
 
 #endif

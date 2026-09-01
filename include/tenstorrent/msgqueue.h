@@ -867,7 +867,9 @@ union characterisation_submsg_data {
  *          @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO returns layout for host CSM reads (no ELF).
  *          Submessages @ref TT_SUB_MSG_START_POWER_COUNTER, @ref TT_SUB_MSG_STOP_POWER_COUNTER, and
  *          @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO control the VCORE TDP power-pattern sampler
- *          (same START payload as clock counter). @c power_pattern[] stores centiwatts at the
+ *          (same START payload as clock counter). These capture submessages are implemented only
+ *          when @c CONFIG_TT_BH_ARC_CAPTURE=y; production images return an error.
+ *          @c power_pattern[] stores centiwatts at the
  *          start of @c capture_buffer; @c clock_pattern[] follows in the same region (see
  *          @c CONFIG_TT_BH_ARC_CAPTURE_BUFFER_BYTES / @c CONFIG_TT_BH_ARC_POWER_CAPTURE_BYTES).
  *

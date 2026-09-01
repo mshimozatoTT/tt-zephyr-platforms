@@ -13,7 +13,6 @@
 #include "vf_curve.h"
 #include "throttler.h"
 #include "aiclk_ppm.h"
-#include "power_pattern.h"
 #include "voltage.h"
 #include "init.h"
 #include "reg.h"
@@ -22,6 +21,10 @@
 LOG_MODULE_REGISTER(dvfs, CONFIG_TT_APP_LOG_LEVEL);
 
 static const struct device *const fwtable_dev = DEVICE_DT_GET(DT_NODELABEL(fwtable));
+
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
+#include "power_pattern.h"
+#endif
 
 bool dvfs_enabled;
 
@@ -41,8 +44,10 @@ void DVFSChange(void)
 	DecreaseAiclk();
 	VoltageChange();
 	IncreaseAiclk();
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 	clock_counter();
 	power_counter();
+#endif
 }
 
 static void dvfs_work_handler(struct k_work *work)

@@ -184,20 +184,24 @@ enum char_submsg_ids {
 	TT_SUB_MSG_SET_TELEMETRY_UPDATE_INTERVAL = 0x5,
 	/** @brief Start AICLK clock-pattern counter (@ref characterisation_clock_counter_start_submsg) */
 	TT_SUB_MSG_START_CLOCK_COUNTER = 0x6,
+	/** @brief Start AICLK clock-pattern counter (@ref characterisation_clock_counter_start_submsg).
+	 *  Compiled in only when @c CONFIG_TT_BH_ARC_CAPTURE=y; otherwise returns error.
+	 */
+	TT_SUB_MSG_START_CLOCK_COUNTER = 0x7,
 	/** @brief Stop AICLK clock-pattern counter (no payload) */
-	TT_SUB_MSG_STOP_CLOCK_COUNTER = 0x7,
+	TT_SUB_MSG_STOP_CLOCK_COUNTER = 0x8,
 	/** @brief Query @c clock_pattern layout (no submsg payload).
 	 *
 	 * Response @c data[1].. (see @ref characterisation_msg_rqst): VMA, capacity, sample divisor,
 	 * layout magic, fill index. Lets the host read CSM without @c zephyr.elf.
 	 */
-	TT_SUB_MSG_GET_CLOCK_PATTERN_INFO = 0x8,
+	TT_SUB_MSG_GET_CLOCK_PATTERN_INFO = 0x9,
 	/** @brief Start VCORE power-pattern capture (@ref characterisation_clock_counter_start_submsg) */
-	TT_SUB_MSG_START_POWER_COUNTER = 0x9,
+	TT_SUB_MSG_START_POWER_COUNTER = 0xA,
 	/** @brief Stop VCORE power-pattern capture (no payload) */
-	TT_SUB_MSG_STOP_POWER_COUNTER = 0xA,
+	TT_SUB_MSG_STOP_POWER_COUNTER = 0xB,
 	/** @brief Query @c power_pattern layout (no submsg payload) */
-	TT_SUB_MSG_GET_POWER_PATTERN_INFO = 0xB,
+	TT_SUB_MSG_GET_POWER_PATTERN_INFO = 0xC,
 };
 
 /** @} */
