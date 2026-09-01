@@ -5,9 +5,13 @@
  */
 
 #include "aiclk_ppm.h"
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 #include "capture_buffer.h"
+#endif
 #include "dvfs.h"
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 #include "power_pattern.h"
+#endif
 #include "telemetry.h"
 #include "throttler.h"
 #include "voltage.h"
@@ -42,6 +46,7 @@ typedef enum {
 	CLOCK_MODE_PPM_UNFORCED = 3
 } ClockControlMode;
 
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 uint32_t clock_sequence_counter;
 /* Next write index in @ref clock_pattern (0 .. CLOCK_PATTERN_ROWS-1); equals event count before wrap. */
 uint32_t clock_pattern_next_data_row;
@@ -67,6 +72,7 @@ static uint32_t clock_capture_deadline_ms;
 /* Sum/count of applied MHz each sample tick (for GET_CLOCK_PATTERN_INFO average). */
 static uint64_t clock_applied_mhz_tick_sum;
 static uint32_t clock_applied_mhz_tick_count;
+#endif
 
 typedef struct {
 	bool enabled;
@@ -449,6 +455,7 @@ uint32_t get_enabled_arb_max_bitmask(void)
 	return bitmask;
 }
 
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 void clock_counter(void)
 {
 	if (!enable_counter) {
@@ -635,6 +642,7 @@ static uint8_t handle_char_clock_pattern_get_info(struct response *response)
 	response->data[7] = clock_pattern_ring_wrapped;
 	return 0;
 }
+#endif /* CONFIG_TT_BH_ARC_CAPTURE */
 
 /** @brief Handles the request to set AICLK busy or idle
  * @param[in] request The request, of type @ref aiclk_set_speed_rqst, with command code
@@ -645,6 +653,7 @@ static uint8_t handle_char_clock_pattern_get_info(struct response *response)
 static uint8_t aiclk_busy_handler(const union request *request, struct response *response)
 {
 	last_msg_busy = (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY);
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 	if (enable_counter && start_aiclk_samples_on_go_busy &&
 	    request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY &&
 	    !clock_go_busy_seen_since_start) {
@@ -668,6 +677,7 @@ static uint8_t aiclk_busy_handler(const union request *request, struct response 
 	if (request->aiclk_set_speed.command_code == TT_SMC_MSG_AICLK_GO_BUSY) {
 		power_pattern_on_go_busy();
 	}
+#endif
 	aiclk_update_busy();
 	return 0;
 }
@@ -799,6 +809,7 @@ static uint8_t characterisation_handler(const union request *request, struct res
 	case TT_SUB_MSG_SET_KERNEL_THROTTLER_STOP_NOPS_FREQ:
 		return ThrottlerSetKernelThrottlerStopFreq(
 			request->characterisation_msg.submsg_data.throttler_stop_freq.frequency);
+#ifdef CONFIG_TT_BH_ARC_CAPTURE
 	case TT_SUB_MSG_START_CLOCK_COUNTER:
 		return handle_char_clock_counter_start(
 			&request->characterisation_msg.submsg_data.clock_counter_start);
@@ -818,6 +829,7 @@ static uint8_t characterisation_handler(const union request *request, struct res
 
 	case TT_SUB_MSG_GET_POWER_PATTERN_INFO:
 		return power_pattern_get_info(response);
+#endif
 
 	default:
 		LOG_WRN("Unknown characterization submessage ID: 0x%02x",

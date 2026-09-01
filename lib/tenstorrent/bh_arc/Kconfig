@@ -117,6 +117,19 @@ config TT_BH_ARC_DMFW_PING_TIMEOUT
 	  Timeout for DMFW ping in milliseconds. If the DMFW does not respond within this time,
 	  the ping will be considered failed.
 
+config TT_BH_ARC_CAPTURE
+	bool "CSM AICLK + VCORE power capture"
+	default n
+	help
+	  Allocate a shared CSM buffer and sample applied AICLK (sparse events)
+	  plus VCORE power (dense centiwatts) from the DVFS tick when armed via
+	  CHARACTERISATION START/STOP/GET. Off in production images: no extra
+	  BSS and no extra work in the 1 ms DVFS loop. Enable for lab/debug
+	  builds with -DCONFIG_TT_BH_ARC_CAPTURE=y or
+	  -DEXTRA_CONF_FILE=capture.conf.
+
+if TT_BH_ARC_CAPTURE
+
 config TT_BH_ARC_CAPTURE_BUFFER_BYTES
 	int "Shared host capture buffer size in bytes (power + clock_pattern)"
 	default 147456
@@ -164,6 +177,8 @@ config TT_BH_ARC_POWER_SAMPLE_DIVISOR
 	range 1 1000
 	help
 	  1 = one sample per millisecond. Time for index i is i * divisor ms.
+
+endif # TT_BH_ARC_CAPTURE
 
 module = BH_ARC
 module-str = bh_arc

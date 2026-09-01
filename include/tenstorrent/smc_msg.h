@@ -178,7 +178,9 @@ enum char_submsg_ids {
 	TT_SUB_MSG_SET_KERNEL_THROTTLER_ENABLED = 0x2,
 	/** @brief Set frequency limit for stopping kernel throttler */
 	TT_SUB_MSG_SET_KERNEL_THROTTLER_STOP_NOPS_FREQ = 0x3,
-	/** @brief Start AICLK clock-pattern counter (@ref characterisation_clock_counter_start_submsg) */
+	/** @brief Start AICLK clock-pattern counter (@ref characterisation_clock_counter_start_submsg).
+	 *  Compiled in only when @c CONFIG_TT_BH_ARC_CAPTURE=y; otherwise returns error.
+	 */
 	TT_SUB_MSG_START_CLOCK_COUNTER = 0x4,
 	/** @brief Stop AICLK clock-pattern counter (no payload) */
 	TT_SUB_MSG_STOP_CLOCK_COUNTER = 0x5,
