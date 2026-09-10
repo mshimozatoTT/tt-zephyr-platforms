@@ -565,12 +565,19 @@ typedef union {
 /** @brief GDDR VDDA west rail current in amps, in signed int 16.16 format. */
 #define TAG_GDDR_VDDA_WEST_CURRENT 93
 
+/** @brief VCOREM rail power in W from MAX20816 READ_POUT, signed int 16.16 format.
+ *
+ * Populated when @ref TT_CHAR_RAIL_VCOREM is enabled and sampled.
+ * Host may still compute V×I from tags 86/87 for comparison.
+ */
+#define TAG_VCOREM_POWER_POUT 94
+
 /** @} */ /* end of telemetry_tag group */
 
 /* Not a real tag, signifies the last tag in the list.
  * MUST be incremented if new tags are defined.
  */
-#define TAG_COUNT 94
+#define TAG_COUNT 95
 
 /* Telemetry tags are at offset `tag` in the telemetry buffer */
 #define TELEM_OFFSET(tag) (tag)
@@ -583,7 +590,7 @@ typedef union {
  * The telemetry pass shares the system work queue with the 1 ms DVFS loop, so the interval is
  * floored well above 1 ms to keep telemetry from crowding out frequency and voltage control.
  */
-#define TELEM_UPDATE_INTERVAL_MIN_MS 10
+#define TELEM_UPDATE_INTERVAL_MIN_MS 1
 
 /** @brief Longest accepted telemetry update interval in milliseconds. */
 #define TELEM_UPDATE_INTERVAL_MAX_MS 1000
