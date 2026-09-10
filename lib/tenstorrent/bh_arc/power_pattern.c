@@ -80,10 +80,17 @@ void power_counter(void)
 
 	ReadTelemetryInternal(1, &telemetry);
 
+	const uint32_t power_samples = capture_power_samples();
+	uint16_t *power_data = power_pattern_data();
 	uint32_t wr = power_pattern_next;
 
+	if (power_samples == 0U || power_data == NULL) {
+		enable_power_counter = false;
+		return;
+	}
+
 	if (IS_ENABLED(CONFIG_TT_BH_ARC_POWER_PATTERN_RING_BUFFER)) {
-		if (wr >= POWER_PATTERN_SAMPLES) {
+		if (wr >= power_samples) {
 			power_pattern_ring_wrapped = 1U;
 			wr = 0U;
 			if (!power_pattern_overflow_logged) {
@@ -91,23 +98,28 @@ void power_counter(void)
 				power_pattern_overflow_logged = true;
 			}
 		}
-	} else if (wr >= POWER_PATTERN_SAMPLES) {
+	} else if (wr >= power_samples) {
 		if (!power_pattern_overflow_logged) {
 			LOG_WRN("power_pattern full (%u samples); stopping capture",
-				POWER_PATTERN_SAMPLES);
+				power_samples);
 			power_pattern_overflow_logged = true;
 		}
 		enable_power_counter = false;
 		return;
 	}
 
-	power_pattern_data()[wr] = power_to_centiwatts(telemetry.vcore_power);
+	power_data[wr] = power_to_centiwatts(telemetry.vcore_power);
 	power_pattern_next = wr + 1U;
 }
 
 uint8_t power_pattern_start(const struct characterisation_clock_counter_start_submsg *params)
 {
-	memset(power_pattern_data(), 0, CAPTURE_POWER_BYTES);
+	if (!capture_buffer_ready() || power_pattern_data() == NULL) {
+		LOG_ERR("power_pattern: leftover CSM dump not available");
+		return 1;
+	}
+
+	memset(power_pattern_data(), 0, capture_power_bytes());
 	power_pattern_next = 0U;
 	power_pattern_ring_wrapped = 0U;
 	power_sample_phase = 0U;
@@ -167,8 +179,12 @@ uint8_t power_pattern_stop(void)
 
 uint8_t power_pattern_get_info(struct response *response)
 {
+	if (!capture_buffer_ready() || power_pattern_data() == NULL) {
+		return 1;
+	}
+
 	response->data[1] = (uint32_t)(uintptr_t)power_pattern_data();
-	response->data[2] = POWER_PATTERN_SAMPLES;
+	response->data[2] = capture_power_samples();
 	response->data[3] = (uint32_t)sizeof(uint16_t);
 	response->data[4] = CONFIG_TT_BH_ARC_POWER_SAMPLE_DIVISOR;
 	response->data[5] = POWER_PATTERN_INFO_MAGIC;
@@ -186,7 +202,7 @@ void power_pattern_on_go_busy(void)
 
 	power_go_busy_seen_since_start = true;
 	if (power_reset_index_on_go_busy) {
-		memset(power_pattern_data(), 0, CAPTURE_POWER_BYTES);
+		memset(power_pattern_data(), 0, capture_power_bytes());
 		power_pattern_next = 0U;
 		power_pattern_ring_wrapped = 0U;
 		power_sample_phase = 0U;

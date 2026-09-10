@@ -110,32 +110,23 @@ config TT_BH_ARC_CAPTURE
 	bool "CSM AICLK + VCORE power capture"
 	default n
 	help
-	  Allocate a shared CSM buffer and sample applied AICLK (sparse events)
-	  plus VCORE power (dense centiwatts) from the DVFS tick when armed via
-	  CHARACTERISATION START/STOP/GET. Off in production images: no extra
-	  BSS and no extra work in the 1 ms DVFS loop. Enable for lab/debug
-	  builds with -DCONFIG_TT_BH_ARC_CAPTURE=y or
-	  -DEXTRA_CONF_FILE=capture.conf.
+	  Sample applied AICLK (sparse events) plus VCORE power (dense centiwatts)
+	  from the DVFS tick when armed via CHARACTERISATION START/STOP/GET.
+	  The dump lives in leftover csm_app SRAM from _end to sram_end: no extra
+	  BSS, so firmware growth shrinks the dump instead of failing the link.
+	  Off in production images. Enable for lab/debug builds with
+	  -DCONFIG_TT_BH_ARC_CAPTURE=y or -DEXTRA_CONF_FILE=capture.conf.
 
 if TT_BH_ARC_CAPTURE
 
-config TT_BH_ARC_CAPTURE_BUFFER_BYTES
-	int "Shared host capture buffer size in bytes (power + clock_pattern)"
-	default 147456
-	range 4096 524288
+config TT_BH_ARC_POWER_CAPTURE_PERCENT
+	int "Percent of leftover CSM used for power_pattern (rest is clock_pattern)"
+	default 67
+	range 1 99
 	help
-	  Single CSM/SRAM region for simultaneous VCORE TDP (dense uint16 centiwatts) and
-	  AICLK clock_pattern (sparse 6-byte events). Default 147456 (144 KiB).
-
-config TT_BH_ARC_POWER_CAPTURE_BYTES
-	int "Bytes at the start of the capture buffer for power_pattern samples"
-	default 98304
-	range 2 524288
-	help
-	  Must be even. Each sample is 2 bytes (centiwatts). Remaining bytes in
-	  TT_BH_ARC_CAPTURE_BUFFER_BYTES hold clock_pattern events (6 bytes each).
-	  Default 98304 (96 KiB) => 49152 samples at 1 ms (~49 s) with 49152 bytes
-	  (~8192 events) for clock_pattern.
+	  Split of [_end, sram_end). Power samples are uint16 centiwatts; clock
+	  events are 6 bytes. Default 67 matches the old 96 KiB / 144 KiB split.
+	  Host must use GET_*_INFO for VMA and capacity; they vary by image size.
 
 config TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER
 	bool "Clock pattern ring buffer (keep newest samples when full)"

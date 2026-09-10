@@ -7,6 +7,8 @@
 #ifndef CAPTURE_BUFFER_H
 #define CAPTURE_BUFFER_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /** One stored AICLK transition: firmware sequence tick + packed (mhz, arbiter).
@@ -25,17 +27,15 @@ struct clock_pattern_event {
 	uint16_t mhz;
 } __packed __aligned(2);
 
-/** Host-visible capture RAM (default 144 KiB). Power and clock_pattern share this region. */
-#define CAPTURE_BUFFER_BYTES CONFIG_TT_BH_ARC_CAPTURE_BUFFER_BYTES
-/** Byte size of dense power samples at the start of @ref capture_buffer (must be even). */
-#define CAPTURE_POWER_BYTES  CONFIG_TT_BH_ARC_POWER_CAPTURE_BYTES
-/** Remaining bytes for sparse clock events (6 bytes each). */
-#define CAPTURE_CLOCK_BYTES  (CAPTURE_BUFFER_BYTES - CAPTURE_POWER_BYTES)
-
-#define POWER_PATTERN_SAMPLES (CAPTURE_POWER_BYTES / (int)sizeof(uint16_t))
-#define CLOCK_PATTERN_ROWS    (CAPTURE_CLOCK_BYTES / (int)sizeof(struct clock_pattern_event))
-
-extern uint8_t capture_buffer[CAPTURE_BUFFER_BYTES];
+/**
+ * Leftover CSM between _end and sram_end (csm_app). Not a BSS array: size is
+ * whatever the live firmware did not consume. Host must use GET_*_INFO.
+ */
+bool capture_buffer_ready(void);
+size_t capture_power_bytes(void);
+size_t capture_clock_bytes(void);
+uint32_t capture_power_samples(void);
+uint32_t capture_clock_rows(void);
 
 uint16_t *power_pattern_data(void);
 struct clock_pattern_event *clock_pattern_data(void);

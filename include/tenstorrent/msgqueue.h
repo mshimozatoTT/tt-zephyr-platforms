@@ -869,13 +869,13 @@ union characterisation_submsg_data {
  *          @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO control the VCORE TDP power-pattern sampler
  *          (same START payload as clock counter). These capture submessages are implemented only
  *          when @c CONFIG_TT_BH_ARC_CAPTURE=y; production images return an error.
- *          @c power_pattern[] stores centiwatts at the
- *          start of @c capture_buffer; @c clock_pattern[] follows in the same region (see
- *          @c CONFIG_TT_BH_ARC_CAPTURE_BUFFER_BYTES / @c CONFIG_TT_BH_ARC_POWER_CAPTURE_BYTES).
+ *          @c power_pattern[] stores centiwatts at the start of leftover csm_app SRAM
+ *          (@c _end .. sram_end); @c clock_pattern[] follows. Size is whatever the live
+ *          image did not consume (see @c CONFIG_TT_BH_ARC_POWER_CAPTURE_PERCENT).
  *
  *          Response words for @ref TT_SUB_MSG_GET_CLOCK_PATTERN_INFO (exit code still in @c data[0]
  *          low bits): @c data[1] = VMA of @c clock_pattern, @c data[2] = event capacity
- *          (@c CAPTURE_CLOCK_BYTES / 6), @c data[3] = bytes per @c clock_pattern_event,
+ *          (varies by image), @c data[3] = bytes per @c clock_pattern_event,
  *          @c data[4] = @c CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR, @c data[5] = layout magic
  *          @c 0x02636c70 (v2: mhz bits 0..11 = applied MHz, bits 12..15 =
  *          dominant @c aiclk_arb_max; host must match before reading CSM),
@@ -884,8 +884,8 @@ union characterisation_submsg_data {
  *          sample ticks in the capture window, @c data[7] = ring wrapped.
  *
  *          Response words for @ref TT_SUB_MSG_GET_POWER_PATTERN_INFO: @c data[1] = VMA of
- *          @c power_pattern (start of @c capture_buffer), @c data[2] = sample capacity
- *          (@c CAPTURE_POWER_BYTES / 2), @c data[3] = 2 (uint16 centiwatts), @c data[4] = @c CONFIG_TT_BH_ARC_POWER_SAMPLE_DIVISOR,
+ *          @c power_pattern (start of leftover CSM), @c data[2] = sample capacity
+ *          (varies by image), @c data[3] = 2 (uint16 centiwatts), @c data[4] = @c CONFIG_TT_BH_ARC_POWER_SAMPLE_DIVISOR,
  *          @c data[5] = layout magic @c 0x01727770, @c data[6] = @c power_pattern_next,
  *          @c data[7] = ring wrapped.
  */

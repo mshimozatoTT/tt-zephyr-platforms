@@ -49,7 +49,7 @@ typedef enum {
 
 #ifdef CONFIG_TT_BH_ARC_CAPTURE
 uint32_t clock_sequence_counter;
-/* Next write index in @ref clock_pattern (0 .. CLOCK_PATTERN_ROWS-1); equals event count before wrap. */
+/* Next write index in clock_pattern (0 .. capture_clock_rows()-1); equals event count before wrap. */
 uint32_t clock_pattern_next_data_row;
 /* Set once if ring buffer has wrapped (then host should scan all data rows, not next_data_row). */
 uint8_t clock_pattern_ring_wrapped;
@@ -499,10 +499,15 @@ void clock_counter(void)
 		return;
 	}
 
+	const uint32_t clock_rows = capture_clock_rows();
 	uint32_t wr = clock_pattern_next_data_row;
 
+	if (clock_rows == 0U || clock_pattern_data() == NULL) {
+		return;
+	}
+
 	if (IS_ENABLED(CONFIG_TT_BH_ARC_CLOCK_PATTERN_RING_BUFFER)) {
-		if (wr >= CLOCK_PATTERN_ROWS) {
+		if (wr >= clock_rows) {
 			clock_pattern_ring_wrapped = 1;
 			wr = 0;
 			if (!clock_pattern_overflow_logged) {
@@ -510,9 +515,9 @@ void clock_counter(void)
 				clock_pattern_overflow_logged = true;
 			}
 		}
-	} else if (wr >= CLOCK_PATTERN_ROWS) {
+	} else if (wr >= clock_rows) {
 		if (!clock_pattern_overflow_logged) {
-			LOG_WRN("clock_pattern full (%u events); stopping capture", CLOCK_PATTERN_ROWS);
+			LOG_WRN("clock_pattern full (%u events); stopping capture", clock_rows);
 			clock_pattern_overflow_logged = true;
 		}
 		return;
@@ -555,7 +560,12 @@ void clock_counter(void)
 static uint8_t handle_char_clock_counter_start(
 	const struct characterisation_clock_counter_start_submsg *params)
 {
-	memset(clock_pattern_data(), 0, CAPTURE_CLOCK_BYTES);
+	if (!capture_buffer_ready() || clock_pattern_data() == NULL) {
+		LOG_ERR("clock_pattern: leftover CSM dump not available");
+		return 1;
+	}
+
+	memset(clock_pattern_data(), 0, capture_clock_bytes());
 	clock_sequence_counter = 0U;
 	clock_pattern_next_data_row = 0U;
 	clock_pattern_ring_wrapped = 0;
@@ -634,8 +644,12 @@ static uint8_t handle_char_clock_pattern_get_info(struct response *response)
 		avg_mhz = (uint32_t)(clock_applied_mhz_tick_sum / clock_applied_mhz_tick_count);
 	}
 
+	if (!capture_buffer_ready() || clock_pattern_data() == NULL) {
+		return 1;
+	}
+
 	response->data[1] = (uint32_t)(uintptr_t)clock_pattern_data();
-	response->data[2] = CLOCK_PATTERN_ROWS;
+	response->data[2] = capture_clock_rows();
 	response->data[3] = (uint32_t)sizeof(struct clock_pattern_event);
 	response->data[4] = CONFIG_TT_BH_ARC_CLOCK_SAMPLE_DIVISOR;
 	response->data[5] = CLOCK_PATTERN_INFO_MAGIC;
